@@ -1,0 +1,62 @@
+---
+# ─────────────────────────────────────────────────────────────
+# 新博文模板 —— 数学笔记(MDX + 活图)
+# 用法:复制本文件到 src/content/blog/,重命名为
+#       2026-xx-xx-短横线slug.mdx,然后改下面的 frontmatter。
+# frontmatter 是纯文本,可写中文,注意引号要成对。
+# ─────────────────────────────────────────────────────────────
+title: '文章标题(显示在列表与浏览器标签)'
+description: '一句话摘要,用于列表页与 RSS。'
+pubDate: 2026-09-09
+tags: ['数学', '群论']
+---
+
+{/* 数学笔记需要交互插图时,保留下面这行 import(不要删) */}
+import GroupScene from '../../components/GroupScene.tsx'
+
+{/* ← 从这里开始写正文。支持: */}
+
+{/* 1. 行内公式与块级公式(KaTeX) */}
+行内公式例子:交错群 $A_4$ 有 $|A_4| = 4!/2 = 12$ 个元素。
+
+块级公式:
+$$
+A_4 \cong V_4 \rtimes C_3
+$$
+
+{/* 2. 活图:一行嵌入 GroupViz 交互视图,写法对照下面注释 */}
+
+{/* 参数速查
+   symbol  群的符号,与 GroupViz 一致,例如 'A4' / 'C_{6}' / 'D_{8}' / 'S_{3}'
+   view    视图类型,四选一:
+             'set'    集合视图(元素摊开,适合展示元素构成)
+             'cycle'  循环图(展示元素阶与循环子群结构)
+             'cayley' 凯莱图(展示生成元与连边结构)
+             'table'  乘法表(适合讲运算律/子群/中心)
+   height  画布逻辑高度 px,默认 380,可按内容调
+   caption 显示在画布下方的说明文字(可选)
+   showLabels 仅集合视图有效:是否常驻元素名(默认 true)
+*/}
+
+{/* 2a. 集合视图示例:展示元素构成 */}
+<GroupScene client:only="react" symbol="A4" view="set" height={360} caption="例:A₄ 的 12 个元素" />
+
+{/* 2b. 循环图示例 */}
+<GroupScene client:only="react" symbol="A4" view="cycle" height={400} caption="例:A₄ 的循环结构" />
+
+{/* 3. 代码块或提示块 */}
+```python
+# 技术性段落也可高亮
+print("hello group theory")
+```
+
+> 引用/提示块用大于号开头。
+
+## 小节标题用 ## 起
+
+正文段落直接写。列表:
+- 第一点
+- 第二点
+
+{/* 写完后:git add 新文件 → commit → push,CI 约 2 分钟后自动上线。
+   日期要写当天;slug 用英文短横线,不要用中文。 */}

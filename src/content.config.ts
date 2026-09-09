@@ -12,6 +12,8 @@ const blog = defineCollection({
     title: z.string(),
     description: z.string().optional(),
     pubDate: z.coerce.date(),
+    /** 最后实质更新日期(可选,显示在文章底部信息区) */
+    updateDate: z.coerce.date().optional(),
     /** 每篇独立配置 tags；展示侧按出现顺序自动聚合 */
     tags: z.array(z.string()).default([]),
     /** true = 草稿，不进列表与 RSS */
