@@ -24,7 +24,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - name: Install dependencies
+        # npm ci 严格照搬 lock 树,不补装跨平台 optional native binding
+        # (npm/cli#4828: Windows 生成的 lock 缺 linux 的 rolldown binding)
+        # npm install 会按当前平台自愈补齐,故此处不用 ci
+        run: npm install --no-audit --no-fund
       - run: npm run build
 
       - name: Checkout user Pages repo
