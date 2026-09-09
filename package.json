@@ -1,0 +1,34 @@
+{
+  "name": "blog",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "rrCathy's blog — Astro + React + MDX, deployed to rrcathy.github.io/blog",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^5.0.4",
+    "@astrojs/react": "^5.0.7",
+    "@astrojs/rss": "^4.0.19",
+    "@groupviz/core": "^2.0.0",
+    "@groupviz/react": "^2.0.0",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "astro": "^6.4.8",
+    "katex": "~0.16.45",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "~6.0.2"
+  }
+}

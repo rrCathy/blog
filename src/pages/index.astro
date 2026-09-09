@@ -1,0 +1,54 @@
+---
+import { getCollection } from 'astro:content'
+import BaseLayout from '../layouts/BaseLayout.astro'
+
+const all = (await getCollection('blog'))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+
+const base = import.meta.env.BASE_URL
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+// 标签聚合(按出现顺序去重)
+const tags: string[] = []
+for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.push(t)
+---
+
+<BaseLayout
+  title="rrCathy 的博客"
+  pageTitle="rrCathy · Blog"
+  description="数学笔记与技术记录 —— 群论可视化、前端开发等"
+>
+  <div class="wrap">
+    <section class="blog-hero">
+      <h1>rrCathy 的博客</h1>
+      <p class="sub">数学笔记与开发记录 · 文章里的插图是可以交互的活图 —— 试试悬停与拖拽。</p>
+    </section>
+
+    <div class="tag-filter" aria-label="文章标签">
+      {tags.map((t) => <span>#{t}</span>)}
+    </div>
+
+    <ul class="post-list">
+      {
+        all.map((post) => (
+          <li class="post-item">
+            <div class="post-meta">
+              <time datetime={post.data.pubDate.toISOString()}>
+                {fmtDate(post.data.pubDate)}
+              </time>
+              {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+            </div>
+            <h2><a href={base + post.id + '/'}>{post.data.title}</a></h2>
+            {post.data.description && (
+              <p class="post-excerpt">{post.data.description}</p>
+            )}
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>

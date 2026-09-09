@@ -1,0 +1,55 @@
+name: Deploy blog to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-blog
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & deploy to rrcathy.github.io/blog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Checkout user Pages repo
+        uses: actions/checkout@v4
+        with:
+          repository: rrCathy/rrcathy.github.io
+          token: ${{ secrets.PAGES_TOKEN }}
+          path: pages-site
+
+      - name: Replace blog/ directory with new build
+        run: |
+          rm -rf pages-site/blog
+          mkdir -p pages-site/blog
+          cp -r dist/* pages-site/blog/
+          touch pages-site/blog/.nojekyll
+
+      - name: Commit & push to rrcathy.github.io
+        run: |
+          cd pages-site
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+            exit 0
+          fi
+          git commit -m "Deploy blog from rrCathy/blog @ ${{ github.sha }}"
+          git push
