@@ -31,11 +31,13 @@ import GroupScene from '../../components/GroupScene.tsx'
 
 合计 $1+8+3=12$。为什么恰好是这些？一个四面体有 4 个顶点；绕任一个顶点的轴把另外三个顶点轮换，这是唯一的“把 1 个顶点固定住”的非平凡旋转；而 $180°$ 旋转不固定任何顶点，它交换两对“对角”。几何上能自洽，代数上我们马上会看到 $12$ 这个数再次出现——不是巧合。
 
-先认识这两类“基本动作”。下面两张图都来自 GroupViz 的对称性视图：左边演示一个 3-循环如何把正四面体绕“顶点 1–对面心”轴旋转 $120°$；右边演示一个双对换如何绕相对棱轴翻转 $180°$。拖动可以换角度看，点击场景底部浮条可重放同一动作。
+先认识这两类“基本动作”。GroupViz 的对称性视图会用四面体自己来演：四个角是四颗小球——红、黄绿、青、紫。演示时，**红色粗线就是旋转轴**；轴上如果穿过一颗**黄球**，说明轴正对一个顶点（3 次轴）；如果穿过两颗**青球**，说明轴连着一对相对棱的中点（2 次轴）。
 
-<GroupScene client:only="react" symbol="A4" view="symmetry" actionElement="(234)" height={420} locked={false} showFigureTitle={false} caption="3-循环 (234)：绕顶点 1 的轴旋转 120°，2→3→4→2" />
+下面两张图都来自对称性视图，左边默认演示一个 3-循环、右边默认演示一个双对换。它们都是“活的”：点操作台里任一元素就能换一个旋转来看，按 ⟳ 重播一次，或按 ▶ 让动画自动循环——多试几个 3-循环你会注意到：**每次都是黄球那个角被固定，另外三颗球绕轴轮转**，变的只是固定哪一个角。
 
-<GroupScene client:only="react" symbol="A4" view="symmetry" actionElement="(12)(34)" height={420} locked={false} showFigureTitle={false} caption="双对换 (12)(34)：绕相对棱轴旋转 180°，同时交换 1↔2 与 3↔4" />
+<GroupScene client:only="react" symbol="A4" view="symmetry" picker pickerOrders={[3]} actionElement="(234)" autoDemo height={400} showFigureTitle={false} caption="3-循环 (234)：红轴穿过黄球顶点 = 固定那个角，其余三角绕轴轮换 120°" />
+
+<GroupScene client:only="react" symbol="A4" view="symmetry" picker pickerOrders={[2]} actionElement="(12)(34)" autoDemo height={400} showFigureTitle={false} caption="双对换 (12)(34)：红轴连接两颗青球（相对棱中点），整体翻转 180°，对角两两互换" />
 
 注意第二张图中 $180°$ 旋转的“副作用”：它把两对对角**同时**交换——这正是后面置换记号里 $(12)(34)$ 的来历。
 
@@ -52,14 +54,14 @@ import GroupScene from '../../components/GroupScene.tsx'
 
 ## 给四个角编号：旋转变成了置换
 
-四个角长得一样，为了说清楚“谁去了哪”，给它们贴上标签 $1,2,3,4$。于是**每个旋转都变成一种“重新排列四个标签”的方式**，叫做一个**置换**：
+四个角长得一样，为了说清楚“谁去了哪”，给它们贴上标签 $1,2,3,4$。于是**每个旋转都变成一种“重新排列四个标签”的方式**，叫做一个**置换**。需要提醒：标签只属于记号本身——插图里不写字，四个角用四颗不同颜色的小球（**红、黄绿、青、紫**）来指认，盯住一颗球在旋转中的去向，就能读出对应置换。
 
 - 绕顶点 1 的轴转 $120°$，把 $2\to3\to4\to2$，写成 $(234)$；
 - 绕某条 2 次轴转 $180°$，把 $1\leftrightarrow2$、$3\leftrightarrow4$，写成 $(12)(34)$。
 
-12 个旋转给出 12 个置换。与其把它们列成一张表，不如直接看一个元素在四面体上怎么“动”——下面这张图用对称性视图演示其中一个 3-循环；你可以拖动旋转四面体，同时观察轴和受影响顶点的标记：
+12 个旋转给出 12 个置换。与其把它们列成一张表，不如把整个群交到你手里：下面这张**元素操作台**把全部 12 个元素都摆了出来，点任何一个，看它怎样转动四面体；想重看按 ⟳，或按 ▶ 让它自动循环。观察规律：点 **3-循环**时红轴穿过黄球（顶点轴，$120°$）；点**双对换**时红轴穿过两颗青球（相对棱轴，$180°$）；点 **e** 则回到静止，此时可以自由拖动四面体换角度看。
 
-<GroupScene client:only="react" symbol="A4" view="symmetry" actionElement="(134)" height={430} locked={false} showFigureTitle={false} caption="12 个旋转 = 12 个偶置换；这里演示 (134) 的 120° 旋转作用" />
+<GroupScene client:only="react" symbol="A4" view="symmetry" picker includeIdentity actionElement="(134)" autoDemo height={400} showFigureTitle={false} caption="元素操作台：12 个旋转任选——3-循环=绕顶点轴 ±120°，双对换=绕相对棱轴 180°" />
 
 这 12 个置换构成一个群，叫**交错群** $A_4$——“交错”一词稍后解释。先注意一件重要的事：**任意置换四个标签的方式总共有 $4! = 24$ 种，而旋转只给出其中一半（12 种）。缺的那一半去哪了？**
 

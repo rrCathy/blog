@@ -387,6 +387,91 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   height: 100%;
   font-family: var(--font-mono);
 }
+/* 对称性视图操作台:元素选择条(分组 chips)+ 重播/自动循环 */
+.gv-sym-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border-primary, var(--border));
+  background: var(--bg-primary, var(--bg-soft));
+}
+.gv-sym-groups {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.gv-sym-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+.gv-sym-gtitle {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  margin-right: 0.15rem;
+}
+.gv-sym-chip {
+  border: 1px solid var(--border-primary, var(--border));
+  background: var(--bg-canvas);
+  color: var(--text-body, var(--text));
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.gv-sym-chip:hover {
+  border-color: var(--accent-teal, var(--accent));
+  color: var(--accent-teal, var(--accent-ink));
+}
+.gv-sym-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.gv-sym-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.gv-sym-btn {
+  border: 1px solid var(--border-primary, var(--border));
+  background: var(--bg-canvas);
+  color: var(--text-body, var(--text));
+  font-size: 0.74rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.gv-sym-btn:hover:not(:disabled) {
+  border-color: var(--accent-teal, var(--accent));
+  color: var(--accent-teal, var(--accent-ink));
+}
+.gv-sym-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.gv-sym-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* 悬停气泡:就地显示元素信息(替代常驻标签) */
 .gv-tip {
   position: absolute;
@@ -404,12 +489,12 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   box-shadow: var(--shadow);
 }
 .gv-scene-meta {
-  height: 32px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0 0.85rem;
+  padding: 0.4rem 0.85rem;
   border-top: 1px solid var(--border-primary, var(--border));
   background: var(--bg-primary, var(--bg-soft));
   font-size: 0.74rem;
