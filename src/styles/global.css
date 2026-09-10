@@ -327,6 +327,69 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   background: var(--bg-soft);
 }
 
+/* ---------- 折叠块(.tip):正文给出主线,深水区收进这里 ---------- */
+.article-body .tip {
+  margin: 1.5em 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+.tip-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+  user-select: none;
+}
+.tip-summary::-webkit-details-marker {
+  display: none;
+}
+.tip-summary:hover {
+  color: var(--accent);
+}
+.tip-caret {
+  display: inline-block;
+  font-size: 0.78em;
+  line-height: 1;
+  transition: transform 0.18s ease;
+  transform-origin: 45% 50%;
+}
+.tip[open] .tip-caret {
+  transform: rotate(90deg);
+}
+.tip-body {
+  padding: 0.1rem 1.15rem 1rem;
+  font-size: 0.97rem;
+  color: var(--text-soft);
+}
+.tip-body > :first-child {
+  margin-top: 0.4em;
+}
+.tip-body > :last-child {
+  margin-bottom: 0.2em;
+}
+.tip-body h4 {
+  margin: 1.1em 0 0.4em;
+  font-size: 1rem;
+  color: var(--text);
+}
+/* 打印/无 JS 读者:折叠内容直接铺开 */
+@media print {
+  .tip-body {
+    display: block !important;
+  }
+  .tip-caret {
+    display: none;
+  }
+}
+
 /* KaTeX 溢出保护 */
 .katex-display {
   overflow-x: auto;
@@ -365,6 +428,11 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 }
 .foot-row .tag {
   margin-right: 0.3rem;
+}
+.foot-note {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-left: 0.15rem;
 }
 
 /* ---------- 交互插图(主题跟随页面) ----------
@@ -476,22 +544,8 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   cursor: not-allowed;
 }
 
-/* 悬停气泡:就地显示元素信息(替代常驻标签) */
-.gv-tip {
-  position: absolute;
-  transform: translate(-50%, calc(-100% - 10px));
-  background: var(--bg-primary, var(--card));
-  color: var(--text-heading, var(--text));
-  border: 1px solid var(--border-primary, var(--border));
-  border-radius: 8px;
-  padding: 2px 10px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 5;
-  box-shadow: var(--shadow);
-}
+/* 悬停气泡改由引擎渲染（useSceneState 的 hoverBubble / SceneHoverBubble），
+ * 不再需要壳自绘；此处原有的 .gv-tip 规则已移除。 */
 .gv-scene-meta {
   min-height: 32px;
   display: flex;

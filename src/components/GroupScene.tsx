@@ -1,16 +1,20 @@
 /**
  * GroupScene — 博文内嵌的"活的群论插图"
  *
- * 包装 @groupviz/react 的受控 Scene 组件。Scene 是渲染内核，本身只做
- * 绘制并把交互事件抛给上层；这里补一层轻量壳：元素选中集合、悬停气泡、
- * 主题切换，以及对称性视图的"元素操作台"（选元素看它在几何体上的作用）。
+ * 包装 @groupviz/react（>=2.1.2）的受控 Scene 组件。Scene 是渲染内核，本身只做
+ * 绘制并把交互事件抛给上层。2.1 起引擎自带了外部嵌入所需的便利层，这里就只保留
+ * 博文特有的部分：元素操作台、说明栏、子群切换，其余交给引擎：
+ *
+ *   - 状态 / 平移缩放 / hover 气泡 → useSceneState（四件套 + 拖拽平移 + 滚轮缩放）
+ *   - 元素引用（label / id / 循环记号）→ core.resolveElement，写错会 console.warn
+ *   - 元素阶 → core.elementOrder（group-first）
  *
  *   <GroupScene client:only="react" symbol="A4" view="cayley3d" caption="A₄ 的凯莱图" />
  *
  * 主题说明：默认不写 data-theme，插图跟随页面主题(html[data-theme])；
  * 传 theme="dark"/"light" 可强制单图主题(语境强调用)。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   I18nProvider,
   SetView,
@@ -19,8 +23,14 @@ import {
   TableView,
   Cayley3DScene,
   SymmetryViewScene,
+  useSceneState,
 } from '@groupviz/react'
-import { createGroupFromSymbol } from '@groupviz/core'
+import {
+  createGroupFromSymbol,
+  buildSubgroupGroup,
+  resolveElement as resolveEl,
+  elementOrder as orderOf,
+} from '@groupviz/core'
 import type { GroupElement } from '@groupviz/core'
 
 /** 说明：'coset' 需要额外子群/陪集数据，暂不提供一键封装 */
@@ -29,6 +39,10 @@ export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'sym
 export interface GroupSceneProps {
   /** 群的 symbol，如 'A4'、'C_{6}'、'D_{8}'、'S_{4}'、'A5'，传给 createGroupFromSymbol */
   symbol: string
+  /** 只展示 symbol 里的一个子群：子群的显示记号(如 'V_{4}')；须配合 members 使用 */
+  subgroup?: string
+  /** 子群成员的元素记号(逗号分隔，如 '(12)(34),(13)(24),(14)(23)')，恒等元自动补入 */
+  members?: string
   view: SceneKind
   /** 视图逻辑高度(px)；宽度自适应容器 */
   height?: number
@@ -46,6 +60,8 @@ export interface GroupSceneProps {
   locked?: boolean
   /** 3D：节点球缩放 0.5–2.0(默认 1) */
   nodeScale?: number
+  /** 乘法表：单元格边长 px(默认 50)。调大可缓解 (12)(34) 这类长记号的表头重叠 */
+  cellSize?: number
 
   // ── 对称性视图专属 ──
   /** 是否开启元素作用演示(默认 true)。false = 只显示静态多面体 */
@@ -78,44 +94,15 @@ const VIEW_LABEL: Record<SceneKind, string> = {
 }
 
 const DEFAULT_HINT: Record<SceneKind, string> = {
-  set: '悬停查看元素 · 点击选中',
-  cycle: '悬停查看元素 · 点击选中',
-  cayley: '悬停查看元素 · 点击选中',
+  set: '悬停查看元素 · 点击选中 · 拖动平移',
+  cycle: '悬停查看元素 · 点击选中 · 拖动平移',
+  cayley: '悬停查看元素 · 点击选中 · 拖动平移',
   cayley3d: '拖动旋转 · 滚轮缩放 · 点击选中',
   table: '点击行列/格点查看',
   symmetry: '红轴 = 旋转轴 · 黄球 = 固定顶点 · 青球 = 棱中点',
 }
 
-interface HoverState {
-  label: string | null
-  x: number
-  y: number
-}
-
 /** 按群类型给"阶"配可读的角色名(用于操作台分组) */
-function gcd(a: number, b: number): number {
-  return b === 0 ? a : gcd(b, a % b)
-}
-/** 元素的阶 = value(置换)各循环长度的最小公倍数;恒等 value=[1,2,…,n] → 1 */
-export function elementOrder(el: GroupElement): number {
-  const val: number[] = el.value as number[]
-  const n = val.length
-  const visited = new Array(n).fill(false)
-  let order = 1
-  for (let i = 0; i < n; i++) {
-    if (visited[i]) continue
-    let j = i
-    let len = 0
-    while (!visited[j]) {
-      visited[j] = true
-      j = val[j] - 1
-      len++
-    }
-    if (len > 1) order = (order / gcd(order, len)) * len
-  }
-  return order
-}
-
 function orderTitle(order: number, symbol: string, includeAngle: boolean): string {
   const s = symbol.replace(/[{}_]/g, '').toLowerCase()
   if (order === 1) return '恒等'
@@ -130,19 +117,20 @@ function orderTitle(order: number, symbol: string, includeAngle: boolean): strin
 }
 
 /** 元素在四面体/几何体上的作用描述(操作台当前项的状态行) */
-function describeElement(el: GroupElement, groupSymbol: string): string {
+function describeElement(el: GroupElement, groupSymbol: string, order: number): string {
   const s = groupSymbol.replace(/[{}_]/g, '').toLowerCase()
-  const o = elementOrder(el)
   if (s === 'a4') {
-    if (o === 3) return '3-循环：绕顶点轴转 120°——黄球顶点不动，其余三色轮换'
-    if (o === 2) return '双对换：绕相对棱轴转 180°——红轴穿过两个青球'
+    if (order === 3) return '3-循环：绕顶点轴转 120°——黄球顶点不动，其余三色轮换'
+    if (order === 2) return '双对换：绕相对棱轴转 180°——红轴穿过两个青球'
   }
-  if (o > 1) return `阶 ${o} 元素：绕几何体的对称轴旋转`
+  if (order > 1) return `阶 ${order} 元素：绕几何体的对称轴旋转`
   return '恒等：什么都不做'
 }
 
 export default function GroupScene({
   symbol,
+  subgroup,
+  members,
   view,
   height = 400,
   caption,
@@ -152,6 +140,7 @@ export default function GroupScene({
   autoRotate,
   locked,
   nodeScale,
+  cellSize,
   showAction,
   actionElement,
   picker = false,
@@ -162,26 +151,12 @@ export default function GroupScene({
   autoDemo = false,
   hint,
 }: GroupSceneProps) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(0)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [hover, setHover] = useState<HoverState>({ label: null, x: 0, y: 0 })
   const [resolvedDark, setResolvedDark] = useState(false)
 
   // 对称性视图操作台状态
-  const [pickedLabel, setPickedLabel] = useState<string | null>(null)
+  const [pickedId, setPickedId] = useState<string | null>(null)
   const [autoOn, setAutoOn] = useState(autoDemo)
   const [replayTick, setReplayTick] = useState(0)
-
-  useEffect(() => {
-    const el = hostRef.current
-    if (!el) return
-    const update = () => setWidth(el.clientWidth)
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
 
   // 跟随页面主题(html data-theme / prefers-color-scheme)
   useEffect(() => {
@@ -209,24 +184,43 @@ export default function GroupScene({
     }
   }, [])
 
-  const group = useMemo(() => createGroupFromSymbol(symbol), [symbol])
-  const transform = useMemo(() => ({ x: 0, y: 0, scale: 1 }), [])
-
-  const sceneWidth = width > 0 ? width : 560
-  const viewBox = useMemo(() => ({ width: sceneWidth, height }), [sceneWidth, height])
-
-  // label 或 id → 元素(读者在 MDX 里写记号,内核要的是 id)
-  const resolveElement = useMemo(() => {
-    if (!group) return (_: string | null | undefined): GroupElement | null => null
-    const byLabel = new Map<string, GroupElement>()
-    const byId = new Map<string, GroupElement>()
-    for (const el of group.elements) {
-      byLabel.set(el.label, el)
-      byId.set(el.id, el)
+  const group = useMemo(() => {
+    const parent = createGroupFromSymbol(symbol)
+    if (!parent || !members) return parent
+    const refs = members.split(',').map(s => s.trim()).filter(Boolean)
+    const picked: GroupElement[] = refs
+      .map(r => resolveEl(parent, r))
+      .filter((e): e is GroupElement => e != null)
+    if (!picked.some(e => e.id === parent.identity.id)) picked.push(parent.identity)
+    if (picked.length < 2) return parent
+    try {
+      return buildSubgroupGroup(parent, picked, subgroup || parent.symbol)
+    } catch {
+      return parent
     }
-    return (ref: string | null | undefined) =>
-      (ref ? byLabel.get(ref) ?? byId.get(ref) ?? null : null)
-  }, [group])
+  }, [symbol, members, subgroup])
+
+  const isDark = theme ? theme === 'dark' : resolvedDark
+  const bubbleTheme: 'dark' | 'light' = isDark ? 'dark' : 'light'
+
+  // 状态 / 平移缩放 / hover 全交给引擎（hostProps + sceneProps + hoverBubble）
+  const state = useSceneState(
+    group,
+    useMemo(
+      () => ({
+        theme: bubbleTheme,
+        fallbackViewBoxSize: { width: 560, height },
+        // 乘法表是静态表格，不该被拖走/缩放（图形视图保留平移缩放）
+        enablePan: view !== 'table',
+        enableZoom: view !== 'table',
+      }),
+      [bubbleTheme, height, view],
+    ),
+  )
+  const sceneProps = useMemo(
+    () => (selectable ? state.sceneProps : { ...state.sceneProps, onSelect: () => {} }),
+    [selectable, state.sceneProps],
+  )
 
   const isIdentityEl = (el: GroupElement | null) =>
     !!el && !!group && el.id === group.identity.id
@@ -234,18 +228,18 @@ export default function GroupScene({
   // 当前演示元素(操作台优先，其次 props.actionElement，最后自动兜底)
   const activeEl = useMemo<GroupElement | null>(() => {
     if (!group) return null
-    if (picker) {
-      const fromPick = resolveElement(pickedLabel)
+    if (picker && pickedId) {
+      const fromPick = resolveEl(group, pickedId)
       if (fromPick) return fromPick
     }
-    const fromProp = resolveElement(actionElement)
+    const fromProp = resolveEl(group, actionElement ?? null)
     if (fromProp) return fromProp
     // 自动兜底：首个非恒等 3 阶元，其次 2 阶元
-    const order3 = group.elements.find(el => elementOrder(el) === 3 && el.id !== group.identity.id)
+    const order3 = group.elements.find(el => orderOf(group, el) === 3 && el.id !== group.identity.id)
     if (order3) return order3
-    const order2 = group.elements.find(el => elementOrder(el) === 2 && el.id !== group.identity.id)
+    const order2 = group.elements.find(el => orderOf(group, el) === 2 && el.id !== group.identity.id)
     return order2 ?? null
-  }, [group, picker, pickedLabel, actionElement, resolveElement])
+  }, [group, picker, pickedId, actionElement])
 
   const activeId = activeEl?.id ?? null
   const symShowAction =
@@ -259,11 +253,11 @@ export default function GroupScene({
     const ordersSet = new Set<number>(pickerOrders)
     const list = group.elements.filter(el => {
       if (el.id === group.identity.id) return includeIdentity
-      return pickerOrders ? ordersSet.has(elementOrder(el)) : true
+      return pickerOrders ? ordersSet.has(orderOf(group, el)) : true
     })
     const byOrder = new Map<number, GroupElement[]>()
     for (const el of list) {
-      const o = elementOrder(el)
+      const o = orderOf(group, el)
       const arr = byOrder.get(o) ?? []
       arr.push(el)
       byOrder.set(o, arr)
@@ -284,48 +278,26 @@ export default function GroupScene({
     return () => window.clearInterval(iv)
   }, [autoOn, symActionElementId])
 
-  const handlePick = (label: string) => {
-    setPickedLabel(label)
+  const handlePick = (id: string) => {
+    setPickedId(id)
     setReplayTick(t => t + 1)
   }
   const handleReplay = () => setReplayTick(t => t + 1)
 
-  const onSelect = (id: string, additive: boolean) => {
-    if (!selectable) return
-    setSelected(prev => {
-      const next = new Set(prev)
-      if (additive) {
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-      } else {
-        next.clear()
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  const onHover2D = (el: GroupElement | null, anchor?: { x: number; y: number } | null) => {
-    if (el && anchor) setHover({ label: el.label, x: anchor.x, y: anchor.y })
-    else setHover(h => (h.label ? { label: null, x: 0, y: 0 } : h))
-  }
-  const onHoverTable = (el: GroupElement | null) => {
-    if (el) setHover({ label: el.label, x: 14, y: 14 })
-    else setHover(h => (h.label ? { label: null, x: 0, y: 0 } : h))
-  }
-
   // 常驻标签默认策略
   const sceneShowLabels = showLabels ?? (view === 'set' || view === 'cayley3d' ? true : false)
   const isSymDemo = view === 'symmetry' && (symShowAction || picker)
+  const hoverHint =
+    view === 'table' && state.hovered && group
+      ? `元素 ${state.hovered.label} · 阶 ${orderOf(group, state.hovered)}`
+      : null
   const activeHint =
     hint ??
-    (isSymDemo && picker && activeEl
-      ? describeElement(activeEl, group?.symbol ?? symbol)
-      : isSymDemo && activeEl
-        ? describeElement(activeEl, group?.symbol ?? symbol)
-        : DEFAULT_HINT[view])
+    hoverHint ??
+    (isSymDemo && activeEl && group
+      ? describeElement(activeEl, group.symbol, orderOf(group, activeEl))
+      : DEFAULT_HINT[view])
   const themeAttr = theme ? { 'data-theme': theme } : {}
-  const isDark = theme ? theme === 'dark' : resolvedDark
 
   return (
     <div className="gv-scene" {...themeAttr}>
@@ -343,8 +315,8 @@ export default function GroupScene({
                       type="button"
                       className={'gv-sym-chip' + (isActive ? ' is-active' : '')}
                       aria-pressed={isActive}
-                      onClick={() => handlePick(el.label)}
-                      title={describeElement(el, group.symbol)}
+                      onClick={() => handlePick(el.id)}
+                      title={describeElement(el, group.symbol, orderOf(group, el))}
                     >
                       {el.label}
                     </button>
@@ -376,58 +348,28 @@ export default function GroupScene({
         </div>
       )}
 
-      <div ref={hostRef} className="gv-scene-host" style={{ height }}>
+      <div
+        {...state.hostProps}
+        className="gv-scene-host"
+        style={{ ...state.hostProps.style, height }}
+      >
         {group == null ? (
           <div className="gv-scene-empty">无法识别的群 symbol：{symbol}</div>
-        ) : width > 0 ? (
+        ) : (
           <I18nProvider>
             {view === 'set' && (
-              <SetView
-                group={group}
-                selectedElements={selected}
-                canvasTransform={transform}
-                viewBoxSize={viewBox}
-                showLabels={sceneShowLabels}
-                onSelect={onSelect}
-                onHover={onHover2D}
-              />
+              <SetView group={group} {...sceneProps} showLabels={sceneShowLabels} />
             )}
-            {view === 'cycle' && (
-              <CycleView
-                group={group}
-                selectedElements={selected}
-                canvasTransform={transform}
-                viewBoxSize={viewBox}
-                onSelect={onSelect}
-                onHover={onHover2D}
-              />
-            )}
+            {view === 'cycle' && <CycleView group={group} {...sceneProps} />}
             {view === 'cayley' && (
-              <CayleyView
-                group={group}
-                selectedElements={selected}
-                canvasTransform={transform}
-                viewBoxSize={viewBox}
-                showLabels={sceneShowLabels}
-                onSelect={onSelect}
-                onHover={onHover2D}
-              />
+              <CayleyView group={group} {...sceneProps} showLabels={sceneShowLabels} />
             )}
-            {view === 'table' && (
-              <TableView
-                group={group}
-                selectedElements={selected}
-                canvasTransform={transform}
-                viewBoxSize={viewBox}
-                onSelect={onSelect}
-                onHover={onHoverTable}
-              />
-            )}
+            {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
             {view === 'cayley3d' && (
               <Cayley3DScene
                 group={group}
-                selectedElements={selected}
-                onSelectElement={onSelect}
+                selectedElements={state.selectedElements}
+                onSelectElement={state.select}
                 showLabels={sceneShowLabels}
                 autoRotate={autoRotate}
                 locked={locked}
@@ -447,17 +389,14 @@ export default function GroupScene({
               />
             )}
           </I18nProvider>
-        ) : null}
-
-        {hover.label && (
-          <div className="gv-tip" style={{ left: hover.x, top: hover.y }} role="status">
-            {hover.label}
-          </div>
         )}
+
+        {/* 悬停气泡：2D 图形视图由引擎按锚点就地渲染（乘法表无锚点，改在底部信息栏显示） */}
+        {state.hoverBubble}
       </div>
       <div className="gv-scene-meta">
         <span className="gv-scene-chip">
-          {symbol} · {VIEW_LABEL[view]}
+          {members && subgroup ? subgroup : symbol} · {VIEW_LABEL[view]}
         </span>
         {caption ? (
           <span className="gv-scene-caption" title={caption}>

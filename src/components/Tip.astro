@@ -1,0 +1,30 @@
+---
+/**
+ * Tip — 可展开/收起的"深水区"折叠块。
+ *
+ * 用途：正文面向初学者，把严格论证、计算、推导、构造等内容收进这里，
+ * 读者想较真时再展开，不影响主线阅读。
+ *
+ *   <Tip label="为什么恰好是这 12 个">…Markdown 内容…</Tip>
+ *
+ * 纯静态 <details>，无需 JS；样式见 global.css 的 .tip 系列。
+ */
+interface Props {
+  /** 折叠时显示的摘要文案；缺省「展开细节」 */
+  label?: string
+  /** 初始是否展开；缺省 false */
+  open?: boolean
+}
+
+const { label = '展开细节', open = false } = Astro.props
+---
+
+<details class="tip" {...(open ? { open: true } : {})}>
+  <summary class="tip-summary">
+    <span class="tip-caret" aria-hidden="true">▸</span>
+    <span class="tip-label">{label}</span>
+  </summary>
+  <div class="tip-body">
+    <slot />
+  </div>
+</details>
