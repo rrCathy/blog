@@ -146,3 +146,40 @@ grep -o "新写的某句话" dist/<slug>/index.html
 1. **深挖一个点，别急着拓宽。** 拓扑图论那节已经点到为止了。下一篇与其继续往外铺，不如把这次被迫隐去的假设变成主题，单独写「凯莱图与生成元的选取」，正好接住已经做出来的可视化引擎。
 2. **引擎侧待办**（等引擎那边改完再回看）：元素引用类 props 能接受 label 或 id 并内部解析；`TableView` 已支持 `subsets` 做子群着色但壳没透出；2D 视图缺 `theme` prop。
 3. **提交前**：确认 `updateDate` 有值，页脚「最后更新」才会显示。
+
+## 八、第二篇之后补记
+
+第二篇《凯莱图：从手绘到代码，再到引擎》写完后追加。
+
+**引擎 bug，已修（v2.1.4，commit `dcd792d`）：** 原 `CayleyView.tsx` 算圆形布局半径时只看宽度（`Math.min(viewBoxSize.width * 0.3, 180 + n * 10)`），没管高度。**只影响 `circular` 形状**（S₃、循环群 Cₙ，以及回退到圆形的群）。容器宽扁（如 900×360）时半径超过 `height/2`，节点被推出画布：S₃ 的半径恒为 `180+6*10=240`，所以 `height` 得 >480 才安全；`A₄` 走 `projection3D`，**不受影响**。
+
+修法正是当时预判的：新增共享纯函数 `circleLayoutRadius(width, height, n, nodeRadius, opts?)`（`src/core/algebra/layouts/shared.ts`），半径取 `min(width×0.3, halfW, halfH, 180+n×10)`，五个调用点（CayleyView / FloatingViewWindow / GroupCanvas / SylowView / CycleView）统一改走它，测试 +7，publish-smoke 加了永久门禁。
+
+**验证做法（可复用）：** blog 侧装的是 npm 上的 `@groupviz/core` / `@groupviz/react`，引擎改完要先 `npm i @groupviz/core@<ver> @groupviz/react@<ver>`（注意 npm 可能报 `up to date` 但仍装了新版本，务必 `grep version node_modules/@groupviz/core/package.json` 复核）。然后 build + preview + Playwright 真机量节点外沿。
+
+量节点别去抓 `<circle>`——`CayleyView` 的节点圆坐标在父级 `<g transform="translate(x,y)">` 上，直接抓 circle 的 `cx/cy` 全是 0，会得到假的「全部在原点」。正确姿势：`g[style*="cursor"]` 里的 `translate` 配 circle 的 `r`。3D 视图（`cayley3d`）用的是 WebGL canvas 不是 SVG，量不到 `astro-island svg`，要单独按 canvas 检查。
+
+**实测存档（900×360 视口，画布 750×H，nodeRadius=28）：**
+
+| 场景 | 修复前 yRange | 修复后 yRange | 结论 |
+|---|---|---|---|
+| S₃ circular h=360 | `[-88, 448]`（溢出 ±88） | `[16.0, 344.0]` | 修复 |
+| C₆ circular h=360 | 同上 | `[16.0, 344.0]` | 修复 |
+| S₃ circular h=244（极端） | 溢出 | `[16.0, 224.0]` | 修复 |
+| A₄ projection3D h=360 | `[52.0, 308.0]` | `[52.0, 308.0]` | 未误伤 |
+
+修复后文章里那两张 S₃ circular 的 `height` 已从绕 bug 的 `560` 收到 `440`。回归页留在 `src/content/blog/zzbug.mdx`（`draft: true`，不进列表和 RSS），含 5 格含极端宽扁的对照组。
+
+**移动端代码块贴边（已修）：** `global.css` 的 `@media (max-width: 640px)` 里原本有一条 `.article-body pre { margin-inline: calc(-1 * var(--gutter)); border-radius: 0 }`，让代码块全宽出血到屏幕边缘。结果是 390 视口下代码块从 `18.4px` 的正文边距被拉到 `0 → 390`，左右零空隙、圆角归零，和正文左对齐线错位。**出血是个刻意的设计，但在有侧边距的正文里反而破坏了对齐节奏**，已删掉，代码块现在与正文同宽同边距（四视口实测 `aligned: true`：390 / 360 / 768 / 1280）。
+
+顺带暴露的第二处：Shiki 只给 `pre` 设了背景色，**没有内边距**（内联 style 只有 `background-color` / `color` / `overflow-x` / `white-space`），之前被负 margin 视觉掩盖。基础样式里补了 `padding: 0.95em 1.05em` + `margin: 1.6em 0`。以后动代码块样式记得这两处是一套。
+
+**改样式后的验证口径：** 别只看 390 一个视口。用 390 / 360 / 768 / 1280 四挡量 `pre` 与 `.article-body` 的左右边界差（应 < 0.6px），再截图肉眼看。活图（GroupScene）在 390 下边距和圆角都正常，操作台的标题截断（`ellipsis`）是引擎既有行为，不是 bug。
+
+**壳已补的能力（第二篇用上了）：** `GroupScene` 现在支持 `actions`（逗号分隔的元素引用，如 `actions="(12),(23)"`）和 `multiplyType`。引擎侧 `CayleyView`/`Cayley3DScene` 一直有这两个 prop，是壳之前没透出。`actions` 缺省不传时行为与从前完全一致。
+
+**各群的 2D 默认形状不一样，配图前先查：** A₄/A₅/Sₙ 走 `projection3D`（多面体等轴投影，节点会重叠），S₃ 和循环群走 `circular`。判断用 `getDefaultShape2D(group)`。`projection3D` 的坐标按视口缩放，高度给大图就大；`circular` 半径与视口无关，高度不够就裁。
+
+**这条很值得记住：写「凯莱图依赖生成元」这类主题时，活图必须能换生成元，否则论点只能靠文字撑。** 换生成元的对比（节点位置不动、边全变）在 3D 视图下视觉效果极强，比 2D 好，值得优先用 `cayley3d`。
+
+**核查手段固定下来：** 引擎能在 Node 里直接 `require` 跑（`node_modules/@groupviz/core/index.js`），写临时脚本调 `createGroupFromSymbol` + `computeCayleyActionEdges` 验证边数、度数、邻接，比手算可靠。脚本含模板字符串时用 Write 工具写文件，别用 heredoc（`${}` 会被 shell 吞）。

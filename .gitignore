@@ -6,3 +6,6 @@ dist.old/
 *.log
 .vercel
 .netlify
+.workbuddy/
+# 本地回归验证页（draft，不入库；需要时临时跑）
+src/content/blog/zzbug.mdx

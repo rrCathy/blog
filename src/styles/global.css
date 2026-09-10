@@ -304,6 +304,9 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   border-radius: var(--radius);
   overflow-x: auto;
   border: 1px solid var(--border);
+  /* Shiki 只给 pre 设了背景色,内边距得自己补 */
+  padding: 0.95em 1.05em;
+  margin: 1.6em 0;
 }
 .article-body pre code {
   background: transparent;
@@ -606,11 +609,6 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
     height: auto;
     padding: 0.7rem var(--gutter);
     flex-wrap: wrap;
-  }
-  /* 代码块全宽出血到屏幕边缘,与 --gutter 对齐 */
-  .article-body pre {
-    margin-inline: calc(-1 * var(--gutter));
-    border-radius: 0;
   }
   /* 宽表格在窄屏内可横向滚动,避免撑破版心 */
   .article-body table {
