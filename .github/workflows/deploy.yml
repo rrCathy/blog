@@ -32,10 +32,25 @@ jobs:
         # npm ci/install 都不会补装 linux 的 optional native binding,
         # 导致 rolldown 加载失败(Cannot find module '@rolldown/binding-wasm32-wasi')。
         # 按实际安装的 rolldown 版本显式补装 linux-x64 binding(runner 为 ubuntu x64)。
+        # 带重试以吸收 registry 瞬时抖动;最后显式 require 校验,避免静默失败。
         run: |
+          set -euo pipefail
           RB="$(node -p "require('./node_modules/rolldown/package.json').version")"
-          echo "Rolldown version: ${RB}"
-          npm install --no-save --package-lock=false "@rolldown/binding-linux-x64-gnu@${RB}"
+          echo "rolldown version: ${RB}"
+          echo "registry: $(npm config get registry)"
+          ok=0
+          for i in 1 2 3; do
+            if npm install --no-save --no-audit --no-fund --package-lock=false \
+                 "@rolldown/binding-linux-x64-gnu@${RB}"; then ok=1; break; fi
+            echo "::warning::attempt ${i} failed; retrying in 5s"
+            sleep 5
+          done
+          if [ "${ok}" != "1" ]; then
+            echo "::error::failed to install @rolldown/binding-linux-x64-gnu@${RB} after 3 attempts"
+            exit 1
+          fi
+          ls -la node_modules/@rolldown/ || true
+          node -e "require('@rolldown/binding-linux-x64-gnu'); console.log('rolldown linux binding loaded OK')"
 
       - run: npm run build
 
