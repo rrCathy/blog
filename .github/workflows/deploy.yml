@@ -32,24 +32,32 @@ jobs:
         # npm ci/install 都不会补装 linux 的 optional native binding,
         # 导致 rolldown 加载失败(Cannot find module '@rolldown/binding-wasm32-wasi')。
         # 按实际安装的 rolldown 版本显式补装 linux-x64 binding(runner 为 ubuntu x64)。
-        # 带重试以吸收 registry 瞬时抖动;最后显式 require 校验,避免静默失败。
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          echo "node: $(node --version) | npm: $(npm --version) | registry: $(npm config get registry)"
+          if [ ! -f node_modules/rolldown/package.json ]; then
+            echo "::error title=rolldown-missing::node_modules/rolldown/package.json not found. node_modules top40: $(ls node_modules | head -n 40 | tr '\n' '|')"
+            exit 1
+          fi
           RB="$(node -p "require('./node_modules/rolldown/package.json').version")"
           echo "rolldown version: ${RB}"
-          echo "registry: $(npm config get registry)"
           ok=0
           for i in 1 2 3; do
             if npm install --no-save --no-audit --no-fund --package-lock=false \
-                 "@rolldown/binding-linux-x64-gnu@${RB}"; then ok=1; break; fi
-            echo "::warning::attempt ${i} failed; retrying in 5s"
+                 "@rolldown/binding-linux-x64-gnu@${RB}" > npm-binding.log 2>&1; then
+              ok=1; break
+            fi
+            echo "::warning::attempt ${i} failed"
             sleep 5
           done
           if [ "${ok}" != "1" ]; then
-            echo "::error::failed to install @rolldown/binding-linux-x64-gnu@${RB} after 3 attempts"
+            echo "----- npm log (tail 40) -----"
+            tail -n 40 npm-binding.log
+            # 把 npm 关键报错冒烟为注解,便于无 admin 权限时通过公开 API 诊断
+            A="$(grep -E 'npm (ERR!|error)|ETARGET|ERESOLVE|ENOTFOUND|EAI_AGAIN|403|404' npm-binding.log | head -n 5 | tr '\n' '|' | cut -c1-900)"
+            echo "::error title=npm-binding-install-failed::${A}"
             exit 1
           fi
-          ls -la node_modules/@rolldown/ || true
           node -e "require('@rolldown/binding-linux-x64-gnu'); console.log('rolldown linux binding loaded OK')"
 
       - run: npm run build
