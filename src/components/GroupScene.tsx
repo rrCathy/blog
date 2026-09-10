@@ -30,6 +30,7 @@ import {
   buildSubgroupGroup,
   resolveElement as resolveEl,
   elementOrder as orderOf,
+  COLOR_PALETTE,
 } from '@groupviz/core'
 import type { GroupElement } from '@groupviz/core'
 
@@ -62,6 +63,16 @@ export interface GroupSceneProps {
   nodeScale?: number
   /** 乘法表：单元格边长 px(默认 50)。调大可缓解 (12)(34) 这类长记号的表头重叠 */
   cellSize?: number
+
+  // ── 凯莱图专属（view: 'cayley' | 'cayley3d'）──
+  /**
+   * 自定义作用元素（广义凯莱图：任意群元素，不限于生成元）。
+   * 接受元素引用（label / id / 循环记号），逗号分隔，如 '(12),(23)'；缺省用群的生成元。
+   * 这是凯莱图依赖生成元选取的接口——换一组写法就换一张图。
+   */
+  actions?: string
+  /** 边的乘法方向：右乘 x→x·s（默认）或左乘 x→s·x */
+  multiplyType?: 'right' | 'left'
 
   // ── 对称性视图专属 ──
   /** 是否开启元素作用演示(默认 true)。false = 只显示静态多面体 */
@@ -141,6 +152,8 @@ export default function GroupScene({
   locked,
   nodeScale,
   cellSize,
+  actions,
+  multiplyType,
   showAction,
   actionElement,
   picker = false,
@@ -202,6 +215,21 @@ export default function GroupScene({
 
   const isDark = theme ? theme === 'dark' : resolvedDark
   const bubbleTheme: 'dark' | 'light' = isDark ? 'dark' : 'light'
+
+  // 作用的元素：接受 label / id / 循环记号，解析成引擎要的元素 id。
+  // 未命中项丢弃（交给引擎用自己的生成元兜底）；actions 缺省则不传，行为与从前一致。
+  const actionParams = useMemo(() => {
+    if (!group || !actions) return undefined
+    const refs = actions.split(',').map(s => s.trim()).filter(Boolean)
+    const params = refs
+      .map((ref, i) => {
+        const el = resolveEl(group, ref)
+        if (!el) return null
+        return { elementId: el.id, enabled: true, color: COLOR_PALETTE[i % COLOR_PALETTE.length] }
+      })
+      .filter((p): p is { elementId: string; enabled: boolean; color: string } => p != null)
+    return params.length ? params : undefined
+  }, [group, actions])
 
   // 状态 / 平移缩放 / hover 全交给引擎（hostProps + sceneProps + hoverBubble）
   const state = useSceneState(
@@ -362,7 +390,13 @@ export default function GroupScene({
             )}
             {view === 'cycle' && <CycleView group={group} {...sceneProps} />}
             {view === 'cayley' && (
-              <CayleyView group={group} {...sceneProps} showLabels={sceneShowLabels} />
+              <CayleyView
+                group={group}
+                {...sceneProps}
+                showLabels={sceneShowLabels}
+                actions={actionParams}
+                multiplyType={multiplyType}
+              />
             )}
             {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
             {view === 'cayley3d' && (
@@ -374,6 +408,8 @@ export default function GroupScene({
                 autoRotate={autoRotate}
                 locked={locked}
                 nodeScale={nodeScale}
+                actions={actionParams}
+                multiplyType={multiplyType}
               />
             )}
             {view === 'symmetry' && (
