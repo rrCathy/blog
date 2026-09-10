@@ -23,6 +23,8 @@
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
     monospace;
   --content-w: 46rem;
+  /* 页面左右安全边距:所有容器共用,窄屏下统一收窄 */
+  --gutter: 1.5rem;
 }
 
 /* 深色主题:变量覆盖由 html[data-theme] 驱动 */
@@ -83,7 +85,7 @@ a:hover {
 .site-header-inner {
   max-width: calc(var(--content-w) + 4rem);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 var(--gutter);
   height: 58px;
   display: flex;
   align-items: center;
@@ -150,7 +152,7 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 .wrap {
   max-width: calc(var(--content-w) + 4rem);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 var(--gutter);
 }
 
 /* ---------- 文章列表页 ---------- */
@@ -237,8 +239,10 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 }
 
 /* ---------- 文章页 ---------- */
+/* 注意:.article 与 .wrap 是同一元素,这里只能设纵向内边距,
+   否则简写 padding 会把 .wrap 的左右安全边距覆盖为 0(窄屏顶边)。 */
 .article {
-  padding: 3rem 0 5rem;
+  padding-block: 3rem 5rem;
 }
 .article-header {
   margin-bottom: 2.5rem;
@@ -537,16 +541,27 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 640px) {
+  :root {
+    /* 窄屏收窄安全边距:既保证不顶边,又尽量少占正文宽度 */
+    --gutter: 1.15rem;
+  }
   body {
     font-size: 16px;
   }
   .site-header-inner {
     height: auto;
-    padding: 0.7rem 1rem;
+    padding: 0.7rem var(--gutter);
     flex-wrap: wrap;
   }
+  /* 代码块全宽出血到屏幕边缘,与 --gutter 对齐 */
   .article-body pre {
-    margin-inline: -1rem;
+    margin-inline: calc(-1 * var(--gutter));
     border-radius: 0;
+  }
+  /* 宽表格在窄屏内可横向滚动,避免撑破版心 */
+  .article-body table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }
