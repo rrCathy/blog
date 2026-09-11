@@ -28,14 +28,18 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
       <p class="sub">数学笔记与开发记录 · 文章里的插图是可以交互的活图 —— 试试悬停与拖拽。</p>
     </section>
 
-    <div class="tag-filter" aria-label="文章标签">
-      {tags.map((t) => <span>#{t}</span>)}
+    <div class="tag-filter" aria-label="按标签筛选文章">
+      {tags.map((t) => (
+        <button type="button" class="tag-chip" data-tag={t} aria-pressed="false">
+          #{t}
+        </button>
+      ))}
     </div>
 
     <ul class="post-list">
       {
         all.map((post) => (
-          <li class="post-item">
+          <li class="post-item" data-tags={post.data.tags.join(',')}>
             <div class="post-meta">
               <time datetime={post.data.pubDate.toISOString()}>
                 {fmtDate(post.data.pubDate)}
@@ -50,5 +54,31 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
         ))
       }
     </ul>
+    <p class="post-empty" hidden>该标签下暂无文章。</p>
   </div>
 </BaseLayout>
+
+<script>
+  // 标签筛选:点一个 chip 过滤列表,再点同一个取消;chip 是真按钮,aria-pressed 同步状态
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('.tag-filter .tag-chip')]
+  const items = [...document.querySelectorAll<HTMLElement>('.post-item')]
+  const empty = document.querySelector<HTMLElement>('.post-empty')
+  let active: string | null = null
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const t = chip.dataset.tag ?? ''
+      active = active === t ? null : t
+      chips.forEach((c) =>
+        c.setAttribute('aria-pressed', String(active !== null && c === chip)),
+      )
+      let shown = 0
+      items.forEach((item) => {
+        const hit = active === null || (item.dataset.tags ?? '').split(',').includes(active)
+        item.hidden = !hit
+        if (hit) shown++
+      })
+      if (empty) empty.hidden = shown > 0
+    })
+  })
+</script>

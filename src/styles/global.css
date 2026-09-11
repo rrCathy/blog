@@ -176,13 +176,35 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   gap: 0.5rem;
   padding: 0 0 2rem;
 }
-.tag-filter span {
+.tag-filter .tag-chip {
+  appearance: none;
+  font: inherit;
   font-size: 0.78rem;
   padding: 3px 11px;
   border-radius: 999px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
   color: var(--text-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.tag-filter .tag-chip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.tag-filter .tag-chip[aria-pressed='true'] {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.post-empty {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  padding: 1.5rem 0.5rem;
+  margin: 0;
+}
+.post-item[hidden] {
+  display: none;
 }
 
 .post-list {
@@ -367,6 +389,20 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 .tip[open] .tip-caret {
   transform: rotate(90deg);
 }
+/* 右端常驻动作词：summary 的 label 可能是问题句式（如「为什么……？」），
+   读者需要明确的「展开 / 收起」提示才知道可点 */
+.tip-toggle {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+.tip-toggle::after {
+  content: '展开';
+}
+.tip[open] .tip-toggle::after {
+  content: '收起';
+}
 .tip-body {
   padding: 0.1rem 1.15rem 1rem;
   font-size: 0.97rem;
@@ -432,10 +468,127 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 .foot-row .tag {
   margin-right: 0.3rem;
 }
-.foot-note {
+
+/* ---------- 文末上一篇 / 下一篇 ---------- */
+.post-nav {
+  margin-top: 2.75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+.post-nav-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.95rem 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+.post-nav-item:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+}
+.post-nav-item.next {
+  text-align: right;
+  align-items: flex-end;
+}
+.post-nav-label {
+  font-size: 0.78rem;
   color: var(--text-dim);
-  font-size: 0.82rem;
-  margin-left: 0.15rem;
+}
+.post-nav-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* ---------- 代码块复制按钮 ---------- */
+.pre-wrap {
+  position: relative;
+}
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.pre-wrap:hover .copy-btn,
+.copy-btn:focus-visible {
+  opacity: 1;
+}
+.copy-btn.ok {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+/* ---------- 文章目录(宽屏浮动,窄屏不渲染) ---------- */
+.toc {
+  display: none;
+}
+@media (min-width: 1240px) {
+  .toc {
+    display: block;
+    position: fixed;
+    top: 96px;
+    left: calc(50% + 25rem);
+    width: 13.5rem;
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+    font-size: 0.85rem;
+  }
+}
+.toc-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--border);
+}
+.toc li a {
+  display: block;
+  padding: 0.28rem 0 0.28rem 0.9rem;
+  margin-left: -1.5px;
+  border-left: 2px solid transparent;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+.toc li a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.toc li a.active {
+  color: var(--accent-ink);
+  border-left-color: var(--accent);
+}
+.toc li.toc-l3 a {
+  padding-left: 1.7rem;
+  font-size: 0.8rem;
+}
+/* 锚点跳转避开 sticky 头 */
+.article-body h2,
+.article-body h3 {
+  scroll-margin-top: 4.5rem;
 }
 
 /* ---------- 交互插图(主题跟随页面) ----------
@@ -615,5 +768,13 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
+  }
+  /* 上一篇/下一篇在窄屏改单列纵排 */
+  .post-nav {
+    grid-template-columns: 1fr;
+  }
+  .post-nav-item.next {
+    text-align: left;
+    align-items: flex-start;
   }
 }

@@ -11,12 +11,26 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props
-const { Content } = await render(post)
+const { Content, headings } = await render(post)
 const base = import.meta.env.BASE_URL
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 }
+
+// 目录:h2/h3,slug 与 Astro 给标题自动生成的 id 一致
+const toc = (headings ?? []).filter((h) => h.depth === 2 || h.depth === 3)
+
+// 文末导航:上一篇 = 更早发布,下一篇 = 更新发布(draft 不参与)
+const all = (await getCollection('blog'))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+const idx = all.findIndex((p) => p.id === post.id)
+const newer = idx > 0 ? all[idx - 1] : null
+const older = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null
+
+// issue 预填标题:JSX/Astro 双引号属性里的 {expr} 不插值,必须走模板字符串 + 编码
+const issueUrl = `https://github.com/rrCathy/blog/issues/new?title=${encodeURIComponent(`关于「${post.data.title}」`)}`
 ---
 
 <BaseLayout
@@ -36,9 +50,39 @@ function fmtDate(d: Date) {
       <h1>{post.data.title}</h1>
     </header>
 
+    {toc.length > 3 && (
+      <nav class="toc" aria-label="文章目录">
+        <p class="toc-title">目录</p>
+        <ul>
+          {toc.map((h) => (
+            <li class={h.depth === 3 ? 'toc-l3' : undefined}>
+              <a href={`#${h.slug}`}>{h.text}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )}
+
     <div class="article-body">
       <Content />
     </div>
+
+    {(older || newer) && (
+      <nav class="post-nav" aria-label="上一篇与下一篇">
+        {older && (
+          <a class="post-nav-item" href={base + older.id + '/'}>
+            <span class="post-nav-label">← 上一篇</span>
+            <span class="post-nav-title">{older.data.title}</span>
+          </a>
+        )}
+        {newer && (
+          <a class="post-nav-item next" href={base + newer.id + '/'}>
+            <span class="post-nav-label">下一篇 →</span>
+            <span class="post-nav-title">{newer.data.title}</span>
+          </a>
+        )}
+      </nav>
+    )}
 
     <aside class="article-foot">
       <div class="foot-row">
@@ -67,18 +111,13 @@ function fmtDate(d: Date) {
           <a href="https://github.com/rrCathy" target="_blank" rel="noopener">GitHub ↗</a>
           {' · '}
           <a href="mailto:bluejam001@163.com">bluejam001@163.com</a>
-          <span class="foot-note">（在线时间 10:00–24:00）</span>
         </span>
       </div>
       <div class="foot-row">
         <span class="foot-label">评论</span>
         <span>
           发现错误或想深入讨论？到{' '}
-          <a
-            href="https://github.com/rrCathy/blog/issues/new?title=关于「{post.data.title}」"
-            target="_blank"
-            rel="noopener"
-          >
+          <a href={issueUrl} target="_blank" rel="noopener">
             仓库 Issue
           </a>{' '}
           开一条即可，我会收到通知。
@@ -86,4 +125,59 @@ function fmtDate(d: Date) {
       </div>
     </aside>
   </article>
+
+  <script>
+    // 代码块复制按钮:把每个 pre 包进 .pre-wrap,右上角挂按钮
+    document.querySelectorAll<HTMLElement>('.article-body pre').forEach((pre) => {
+      const wrap = document.createElement('div')
+      wrap.className = 'pre-wrap'
+      pre.replaceWith(wrap)
+      wrap.appendChild(pre)
+
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'copy-btn'
+      btn.textContent = '复制'
+      btn.addEventListener('click', async () => {
+        const text = pre.querySelector('code')?.innerText ?? ''
+        try {
+          await navigator.clipboard.writeText(text)
+          btn.textContent = '已复制 ✓'
+          btn.classList.add('ok')
+        } catch {
+          btn.textContent = '复制失败'
+        }
+        setTimeout(() => {
+          btn.textContent = '复制'
+          btn.classList.remove('ok')
+        }, 1500)
+      })
+      wrap.appendChild(btn)
+    })
+
+    // 目录滚动高亮:观察正文 h2/h3,视口上带内命中的最后一节为当前节
+    const tocLinks = [...document.querySelectorAll<HTMLAnchorElement>('.toc a')]
+    if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+      const byId = new Map(tocLinks.map((a) => [a.getAttribute('href')!.slice(1), a]))
+      let current: string | null = null
+      const setActive = () => {
+        tocLinks.forEach((a) =>
+          a.classList.toggle('active', current !== null && a.getAttribute('href') === `#${current}`),
+        )
+      }
+      const obs = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) current = e.target.id
+          }
+          setActive()
+        },
+        { rootMargin: '-70px 0px -66% 0px' },
+      )
+      byId.forEach((_, id) => {
+        const h = document.getElementById(id)
+        if (h) obs.observe(h)
+      })
+    }
+  </script>
 </BaseLayout>

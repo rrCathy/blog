@@ -23,6 +23,7 @@ const { label = '展开细节', open = false } = Astro.props
   <summary class="tip-summary">
     <span class="tip-caret" aria-hidden="true">▸</span>
     <span class="tip-label">{label}</span>
+    <span class="tip-toggle" aria-hidden="true"></span>
   </summary>
   <div class="tip-body">
     <slot />
