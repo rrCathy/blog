@@ -250,6 +250,16 @@ export default function GroupScene({
     [selectable, state.sceneProps],
   )
 
+  // 窄屏下凯莱图节点相对画布过大：引擎 nodeRadius 缺省 28 是绝对值（viewBox≈容器像素），
+  // 容器从桌面 ~750px 缩到手机 ~354px 时节点视觉占比翻倍，2D 里盖住边、3D 里球挤成一团。
+  // 按实测宽度缩到与桌面同比例（28/750≈3.7%），下限 14；宽屏不传、交还引擎缺省。
+  const vbWidth = state.viewBoxSize.width
+  const isNarrow = vbWidth > 0 && vbWidth < 640
+  const cayleyNodeRadius = useMemo(
+    () => (!isNarrow ? undefined : Math.max(14, Math.round(vbWidth * 0.037))),
+    [isNarrow, vbWidth],
+  )
+
   const isIdentityEl = (el: GroupElement | null) =>
     !!el && !!group && el.id === group.identity.id
 
@@ -396,6 +406,7 @@ export default function GroupScene({
                 showLabels={sceneShowLabels}
                 actions={actionParams}
                 multiplyType={multiplyType}
+                nodeRadius={cayleyNodeRadius}
               />
             )}
             {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
@@ -407,7 +418,7 @@ export default function GroupScene({
                 showLabels={sceneShowLabels}
                 autoRotate={autoRotate}
                 locked={locked}
-                nodeScale={nodeScale}
+                nodeScale={nodeScale ?? (isNarrow ? 0.7 : undefined)}
                 actions={actionParams}
                 multiplyType={multiplyType}
               />
