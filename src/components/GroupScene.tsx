@@ -30,9 +30,10 @@ import {
   buildSubgroupGroup,
   resolveElement as resolveEl,
   elementOrder as orderOf,
+  wordLengthSphereActions,
   COLOR_PALETTE,
 } from '@groupviz/core'
-import type { GroupElement } from '@groupviz/core'
+import type { Group, GroupElement, CayleyPathHighlight } from '@groupviz/core'
 
 /** 说明：'coset' 需要额外子群/陪集数据，暂不提供一键封装 */
 export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
@@ -61,6 +62,14 @@ export interface GroupSceneProps {
   locked?: boolean
   /** 3D：节点球缩放 0.5–2.0(默认 1) */
   nodeScale?: number
+  /**
+   * 3D：布局形状（透传引擎 `layout3D`）。缺省按群自动选。
+   * 传 'wordLengthSphere' 走**字长球**：元素按「字长 = 相邻对换下的最短生成元个数」
+   * 分层铺在同心圆上，北极 e、南极 w₀、同层同色。作用边会自动补成相邻对换集
+   * （传了 actions 也以自动集为准，分层才成立）。
+   * 仅 n = 4/5 的 one-line 置换群可用，其余群布局返回 null 会退回缺省形状。
+   */
+  layout3D?: 'wordLengthSphere'
   /** 乘法表：单元格边长 px(默认 50)。调大可缓解 (12)(34) 这类长记号的表头重叠 */
   cellSize?: number
 
@@ -73,6 +82,21 @@ export interface GroupSceneProps {
   actions?: string
   /** 边的乘法方向：右乘 x→x·s（默认）或左乘 x→s·x */
   multiplyType?: 'right' | 'left'
+
+  /**
+   * 路径高亮（VCL）：逗号分隔的元素引用序列，相邻两项须由某条作用边相连；
+   * 或特殊值 'sjt' = 自动生成 Sₙ 的 SJT 哈密顿回路（n=4/5，首尾一步回首）。
+   * 高亮时其余边默认淡化，只留路径醒目。
+   */
+  path?: string
+  /** 路径高亮颜色；缺省金色 #ffd93d。字长球建议传白色等与生成元配色不撞的颜色 */
+  pathColor?: string
+  /** 路径高亮线宽；缺省 5 */
+  pathWidth?: number
+  /** 沿路径逐步点亮（进入即播放） */
+  pathAnimate?: boolean
+  /** 悬停节点时显示经过次序徽标 ① ② ③ … */
+  pathShowOrder?: boolean
 
   // ── 对称性视图专属 ──
   /** 是否开启元素作用演示(默认 true)。false = 只显示静态多面体 */
@@ -103,6 +127,42 @@ const VIEW_LABEL: Record<SceneKind, string> = {
   table: '乘法表',
   symmetry: '对称性视图',
 }
+
+/** 字长球布局下的视图名（只在 S₄/S₅ + layout3D 命中时用） */
+const WORD_LENGTH_LABEL = '字长球 · 3D'
+
+/**
+ * SJT（Steinhaus–Johnson–Trotter）生成 one-line 置换的哈密顿回路，转成 group 的 label 列表。
+ * 每一步交换相邻两个位置（右乘相邻对换），n! 个排列无重复、首尾一步回首。
+ * 仅对 n=4/5 的 one-line 置换群有意义；value 结构不匹配或 n 不在此范围返回空数组。
+ */
+function sjtLabels(group: Group): string[] {
+  const first = group.elements[0]?.value
+  if (!Array.isArray(first)) return []
+  const n = first.length
+  if (n !== 4 && n !== 5) return []
+  const byValue = new Map(group.elements.map((e) => [e.value.join(','), e.label]))
+  const a = Array.from({ length: n }, (_, i) => i + 1)
+  const dir = new Array(n).fill(-1)
+  const labels: string[] = []
+  let guard = 0
+  while (guard++ < 100000) {
+    const label = byValue.get(a.join(','))
+    if (label == null) return []
+    labels.push(label)
+    let m = -1
+    for (let i = 0; i < n; i++) {
+      const j = i + dir[a[i] - 1]
+      if (j >= 0 && j < n && a[j] < a[i] && (m === -1 || a[i] > a[m])) m = i
+    }
+    if (m === -1) break
+    const j = m + dir[a[m] - 1]
+    ;[a[m], a[j]] = [a[j], a[m]]
+    for (let x = a[j] + 1; x <= n; x++) dir[x - 1] *= -1
+  }
+  return labels
+}
+
 
 const DEFAULT_HINT: Record<SceneKind, string> = {
   set: '悬停查看元素 · 点击选中 · 拖动平移',
@@ -151,9 +211,15 @@ export default function GroupScene({
   autoRotate,
   locked,
   nodeScale,
+  layout3D,
   cellSize,
   actions,
   multiplyType,
+  path,
+  pathColor,
+  pathWidth,
+  pathAnimate,
+  pathShowOrder,
   showAction,
   actionElement,
   picker = false,
@@ -216,10 +282,20 @@ export default function GroupScene({
   const isDark = theme ? theme === 'dark' : resolvedDark
   const bubbleTheme: 'dark' | 'light' = isDark ? 'dark' : 'light'
 
+  // 字长球布局要求「中段元素在赤道上」那类几何一致性，缩放半径能整块映射。
+  // 用 useMemo 提前存一份壳状态，避免在 JSX 里重复构造。
+  const sphereActions = useMemo(
+    () => (layout3D === 'wordLengthSphere' && group ? wordLengthSphereActions(group) : null),
+    [layout3D, group],
+  )
+  const isWordLengthSphere = layout3D === 'wordLengthSphere' && sphereActions != null
+
   // 作用的元素：接受 label / id / 循环记号，解析成引擎要的元素 id。
   // 未命中项丢弃（交给引擎用自己的生成元兜底）；actions 缺省则不传，行为与从前一致。
   const actionParams = useMemo(() => {
-    if (!group || !actions) return undefined
+    if (!group) return undefined
+    if (isWordLengthSphere) return sphereActions ?? undefined
+    if (!actions) return undefined
     const refs = actions.split(',').map(s => s.trim()).filter(Boolean)
     const params = refs
       .map((ref, i) => {
@@ -229,7 +305,25 @@ export default function GroupScene({
       })
       .filter((p): p is { elementId: string; enabled: boolean; color: string } => p != null)
     return params.length ? params : undefined
-  }, [group, actions])
+  }, [group, actions, isWordLengthSphere, sphereActions])
+
+  // 路径高亮（VCL）：逗号分隔的元素引用序列，或 'sjt' 自动生成 SJT 哈密顿回路。
+  const pathHighlight = useMemo<CayleyPathHighlight | null>(() => {
+    if (!group || !path) return null
+    const trimmed = path.trim()
+    const refs =
+      trimmed.toLowerCase() === 'sjt'
+        ? sjtLabels(group)
+        : trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+    if (refs.length < 2) return null
+    return {
+      elements: refs,
+      ...(pathColor ? { color: pathColor } : {}),
+      ...(pathWidth != null ? { width: pathWidth } : {}),
+      ...(pathAnimate ? { animate: true } : {}),
+      ...(pathShowOrder ? { showOrder: true } : {}),
+    }
+  }, [group, path, pathColor, pathWidth, pathAnimate, pathShowOrder])
 
   // 状态 / 平移缩放 / hover 全交给引擎（hostProps + sceneProps + hoverBubble）
   const state = useSceneState(
@@ -334,7 +428,9 @@ export default function GroupScene({
     hoverHint ??
     (isSymDemo && activeEl && group
       ? describeElement(activeEl, group.symbol, orderOf(group, activeEl))
-      : DEFAULT_HINT[view])
+      : isWordLengthSphere
+        ? '拖动旋转 · 滚轮缩放 · 同色同字长（相邻对换下的最短生成元个数）'
+        : DEFAULT_HINT[view])
   const themeAttr = theme ? { 'data-theme': theme } : {}
 
   return (
@@ -407,6 +503,7 @@ export default function GroupScene({
                 actions={actionParams}
                 multiplyType={multiplyType}
                 nodeRadius={cayleyNodeRadius}
+                pathHighlight={pathHighlight}
               />
             )}
             {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
@@ -418,9 +515,11 @@ export default function GroupScene({
                 showLabels={sceneShowLabels}
                 autoRotate={autoRotate}
                 locked={locked}
-                nodeScale={nodeScale ?? (isNarrow ? 0.7 : undefined)}
+                nodeScale={isWordLengthSphere ? undefined : (nodeScale ?? (isNarrow ? 0.7 : undefined))}
+                layout3D={layout3D}
                 actions={actionParams}
                 multiplyType={multiplyType}
+                pathHighlight={pathHighlight}
               />
             )}
             {view === 'symmetry' && (
@@ -443,7 +542,7 @@ export default function GroupScene({
       </div>
       <div className="gv-scene-meta">
         <span className="gv-scene-chip">
-          {members && subgroup ? subgroup : symbol} · {VIEW_LABEL[view]}
+          {members && subgroup ? subgroup : symbol} · {isWordLengthSphere ? WORD_LENGTH_LABEL : VIEW_LABEL[view]}
         </span>
         {caption ? (
           <span className="gv-scene-caption" title={caption}>
