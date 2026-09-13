@@ -7,5 +7,8 @@ dist.old/
 .vercel
 .netlify
 .workbuddy/
+# 临时工作目录（验证脚本/截图，跑完可删）
+.tmp-*/
+.tmp-*.txt
 # 本地回归验证页（draft，不入库；需要时临时跑）
 src/content/blog/zzbug.mdx

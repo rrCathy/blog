@@ -33,8 +33,8 @@ import {
   wordLengthSphereActions,
   COLOR_PALETTE,
 } from '@groupviz/core'
-import type { Group, GroupElement, CayleyPathHighlight, Layout3D, CayleyActionParam } from '@groupviz/core'
-import { LAYOUTS_3D } from '@groupviz/core'
+import type { Group, GroupElement, CayleyPathHighlight, Layout3D, CayleyActionParam, CayleyShape2D } from '@groupviz/core'
+import { LAYOUTS_3D, CAYLEY_SHAPES_2D } from '@groupviz/core'
 
 /** 说明：'coset' 需要额外子群/陪集数据，暂不提供一键封装 */
 export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
@@ -112,6 +112,14 @@ export interface GroupSceneProps {
    * 0 = 笔直（S₃ 环的直边六边形样式就是它）；2 = 更弯。
    */
   edgeCurvature?: number
+
+  /**
+   * 2D 凯莱图布局形状（透传引擎 `shape2D`）。缺省按群自动选（getDefaultShape2D）。
+   * 可传引擎任意预设（CAYLEY_SHAPES_2D），如循环群的 'spiral'（螺旋）/'coil'
+   * （玫瑰——大阶循环群下边交叉像玫瑰）、万能的 'cone'（圆锥俯视同心环）、
+   * A₄ 的 'rewiring'（半直积重布线形态）；写错的名字自动退回缺省形状。
+   */
+  shape?: string
 
   /** 是否显示底部说明栏（群记号 chip + caption + 提示）。缺省 true；封面等纯图语境传 false */
   meta?: boolean
@@ -240,6 +248,7 @@ export default function GroupScene({
   pathAnimate,
   pathShowOrder,
   edgeCurvature,
+  shape,
   meta = true,
   showAction,
   actionElement,
@@ -317,6 +326,14 @@ export default function GroupScene({
     return (LAYOUTS_3D as readonly string[]).includes(layout3D) ? (layout3D as Layout3D) : undefined
   }, [layout3D])
 
+  // shape（2D）：同理，必须在 CAYLEY_SHAPES_2D 内才透传，写错退回缺省形状
+  const shapeProp = useMemo<CayleyShape2D | undefined>(() => {
+    if (!shape) return undefined
+    return (CAYLEY_SHAPES_2D as readonly string[]).includes(shape)
+      ? (shape as CayleyShape2D)
+      : undefined
+  }, [shape])
+
   // 逐生成元边长倍率：'元素引用=倍率' → 元素 id → 倍率。字长球布局边集被自动替换，不生效。
   const lengthScaleMap = useMemo(() => {
     if (!lengthScales || !group) return null
@@ -392,14 +409,14 @@ export default function GroupScene({
     [selectable, state.sceneProps],
   )
 
-  // 窄屏下凯莱图节点相对画布过大：引擎 nodeRadius 缺省 28 是绝对值（viewBox≈容器像素），
-  // 容器从桌面 ~750px 缩到手机 ~354px 时节点视觉占比翻倍，2D 里盖住边、3D 里球挤成一团。
-  // 按实测宽度缩到与桌面同比例（28/750≈3.7%），下限 14；宽屏不传、交还引擎缺省。
+  // 凯莱图节点：引擎 nodeRadius 缺省 28 是绝对值（viewBox≈容器像素），
+  // 桌面 ~750px 宽下节点视觉占比偏大，2D 里会盖住边。统一按实测宽度缩到
+  // 约 2.7%（750→20、354→12），大屏封顶 22、下限 12；宽高未测量时不传。
   const vbWidth = state.viewBoxSize.width
   const isNarrow = vbWidth > 0 && vbWidth < 640
   const cayleyNodeRadius = useMemo(
-    () => (!isNarrow ? undefined : Math.max(14, Math.round(vbWidth * 0.037))),
-    [isNarrow, vbWidth],
+    () => (vbWidth > 0 ? Math.min(22, Math.max(12, Math.round(vbWidth * 0.027))) : undefined),
+    [vbWidth],
   )
 
   const isIdentityEl = (el: GroupElement | null) =>
@@ -552,6 +569,7 @@ export default function GroupScene({
                 multiplyType={multiplyType}
                 nodeRadius={cayleyNodeRadius}
                 edgeCurvature={edgeCurvature}
+                shape2D={shapeProp}
                 pathHighlight={pathHighlight}
               />
             )}
