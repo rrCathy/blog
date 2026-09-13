@@ -1,6 +1,8 @@
 ---
 import { getCollection, render } from 'astro:content'
 import BaseLayout from '../layouts/BaseLayout.astro'
+import PostCover from '../components/PostCover.astro'
+import ShareBar from '../components/ShareBar.tsx'
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog')
@@ -31,24 +33,60 @@ const older = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null
 
 // issue 预填标题:JSX/Astro 双引号属性里的 {expr} 不插值,必须走模板字符串 + 编码
 const issueUrl = `https://github.com/rrCathy/blog/issues/new?title=${encodeURIComponent(`关于「${post.data.title}」`)}`
+
+// og:image:静态图片封面(img/字符串)或引擎封面的海报;纯引擎无海报时不输出
+const coverData = post.data.cover
+const coverOgPath =
+  (typeof coverData === 'string' ? coverData : coverData?.img ?? coverData?.poster ?? null) ?? null
+const coverOgUrl = coverOgPath ? base + coverOgPath.replace(/^\//, '') : undefined
+
+// 分享:文章绝对 URL(进文案/二维码);封面静图用**同源相对路径**——canvas 画跨域图
+// 会污染画布致 toBlob 抛 SecurityError,且本地 preview 下绝对域不可达
+const siteOrigin = Astro.site ?? 'https://rrcathy.github.io'
+const postUrl = new URL(base + post.id + '/', siteOrigin).href
+const shareImgUrl = coverOgUrl ?? null
 ---
 
 <BaseLayout
   title="rrCathy 的博客"
   pageTitle={post.data.title}
   description={post.data.description}
+  image={coverOgUrl}
 >
   <article class="wrap article">
-    <header class="article-header">
-      <div class="post-meta">
-        <a href={base}>← 全部文章</a>
-        <time datetime={post.data.pubDate.toISOString()}>
-          {fmtDate(post.data.pubDate)}
-        </time>
-        {post.data.tags.map((t) => <span class="tag">{t}</span>)}
-      </div>
-      <h1>{post.data.title}</h1>
-    </header>
+    {post.data.cover ? (
+      <header class="article-header head-card">
+        <div class="head-card-text">
+          <div class="post-meta">
+            <a href={base}>← 全部文章</a>
+            <time datetime={post.data.pubDate.toISOString()}>
+              {fmtDate(post.data.pubDate)}
+            </time>
+            {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+          </div>
+          <h1>{post.data.title}</h1>
+        </div>
+        <div class="head-card-cover">
+          <PostCover
+            cover={post.data.cover}
+            variant="head"
+            seed={post.id}
+            title={post.data.title}
+          />
+        </div>
+      </header>
+    ) : (
+      <header class="article-header">
+        <div class="post-meta">
+          <a href={base}>← 全部文章</a>
+          <time datetime={post.data.pubDate.toISOString()}>
+            {fmtDate(post.data.pubDate)}
+          </time>
+          {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+        </div>
+        <h1>{post.data.title}</h1>
+      </header>
+    )}
 
     {toc.length > 3 && (
       <nav class="toc" aria-label="文章目录">
@@ -122,6 +160,19 @@ const issueUrl = `https://github.com/rrCathy/blog/issues/new?title=${encodeURICo
           </a>{' '}
           开一条即可，我会收到通知。
         </span>
+      </div>
+      <div class="foot-row">
+        <span class="foot-label">分享</span>
+        <ShareBar
+          client:idle
+          title={post.data.title}
+          description={post.data.description ?? null}
+          url={postUrl}
+          date={fmtDate(post.data.pubDate)}
+          coverSrc={shareImgUrl}
+          slug={post.id}
+          siteName="rrCathy 的博客"
+        />
       </div>
     </aside>
   </article>

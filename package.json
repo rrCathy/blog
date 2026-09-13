@@ -20,6 +20,7 @@
     "@react-three/fiber": "^9.7.0",
     "astro": "^6.4.8",
     "katex": "~0.16.45",
+    "qrcode-generator": "^2.0.4",
     "react": "~19.2.8",
     "react-dom": "~19.2.8",
     "rehype-katex": "^7.0.1",

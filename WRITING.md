@@ -20,6 +20,35 @@ frontmatter 字段（schema 见 `src/content.config.ts`）：
 | `updateDate` | 否 | 有实质修订时补上，页脚会显示「最后更新」 |
 | `tags` | 否 | 数组，展示侧自动聚合 |
 | `draft` | 否 | `true` 则不进列表与 RSS |
+| `cover` | 否 | 封面/头图：首页横卡右侧 + 详情页头部横卡右侧，写法见下 |
+
+**封面（`cover`）三种写法**（schema 见 `src/content.config.ts`，渲染在 `src/components/PostCover.astro`）：
+
+```yaml
+# 1. 纯图片/动图(public/ 下,路径相对 base)
+cover: covers/2026-x.png
+# 2. 图片 + alt(alt 也用于 og:image)
+cover:
+  img: covers/2026-x.png
+  alt: 一句话说明
+# 3. 引擎活图:详情页头部横卡渲染「锁定、不可交互、恒深色」的活图;首页横卡用 poster 静态海报
+cover:
+  engine:
+    symbol: 'S_{4}'
+    view: cayley3d
+    layout3D: 'truncatedOctahedron3'  # 3D 预设形状;S₄ 缺省是 2 生成元的 truncatedOctahedron2
+    actions: '(12),(23),(34)'         # 作用元素;S₄ 三生成元截角八面体必须显式传
+    lengthScales: '(12)(34)=1.4,(234)=0.62'  # 逐生成元边长倍率(0.3–3),须与 actions 同用
+    edgeCurvature: 0                  # 2D 凯莱图直边(S₃ 环)
+    autoRotate: true                  # 3D 封面缺省开
+  poster: covers/260912-s4.png  # 首页静态海报,没给则渐变兜底
+```
+
+引擎封面用在哪，封面就长在哪：首页横卡与详情页头部横卡是**同一套版式**（文字左、封面右、封面左缘向卡底色渐隐），详情页的更大（标题字号更大、封面列 45% 宽、高约 330px）。没写 `cover` 的文章头部保持纯文字版式。
+
+引擎封面的固定语境（作者不可配，PostCover 统一强制）：深色主题、`locked`、`selectable:false`、`meta:false`、不常驻节点标签；详情页横卡外层 `pointer-events:none` 并隐藏 `|G|` 徽章等 overlay（`.gv-html-fullscreen`）。**海报生成流程**见项目技能 `.workbuddy/skills/blog-cover-poster/`：hero 是 client:only 活图，首页不能挂一堆 WebGL——海报用无头浏览器从渲染结果截图。赤道视角(phi≈76°)的 3D 图又扁又糊，单独在临时「摄影棚」页放同配置但**解锁、不自转**的图，playwright 鼠标拖拽抬高相机（拖下 = phi 减小）到 3/4 视角再截 `.gv-scene-host`。海报存 `public/covers/<slug>.png`，路径回填 frontmatter。
+
+**分享（文末信息区，自动启用）**：每篇文章底部「分享」行有两个动作——「复制分享文字」（标题+简介+绝对 URL 进剪贴板）和「生成分享图」（`ShareBar.tsx` client:idle 用 canvas 现画 1200×630 横卡：博客名、标题、简介、二维码+日期+URL、封面静图右置渐隐），模态框预览后可下载 PNG；支持 Web Share API(files) 的平台多一个「系统分享」。作者零配置：文案取 title/description，封面取 img/poster（没有则渐变兜底，与列表同色——取色逻辑在 `src/lib/cover-fallback.ts` 两边共用）。两个坑已踩平：canvas 画跨域图会污染画布致 `toBlob` 抛 SecurityError，封面必须传**同源相对路径**（不能像 og:image 那样给绝对 URL）；分享图固定浅色底（面向微信等外部场景），不随站点主题翻变。
 
 **MDX 的三个坑**（都实际踩过）：
 
