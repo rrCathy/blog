@@ -1,0 +1,123 @@
+---
+/**
+ * PostCover — 文章封面（首页横卡右侧 / 详情页 hero）
+ *
+ * cover 三种形态（schema 见 src/content.config.ts）：
+ *   - 'covers/x.png'        纯图片/动图
+ *   - { img, alt? }         图片 + 说明文字
+ *   - { engine, poster? }   引擎活图：详情页头部横卡右列渲染「锁定、不可交互、恒深色」的活图；
+ *                           首页横卡用 poster 静态海报（无头浏览器从引擎真实渲染截图生成），
+ *                           没给 poster 则渐变兜底
+ * 无 cover 时按 seed（post.id）生成确定性渐变占位——保证每篇都有头图。
+ *
+ * 封面语境统一约定：深色主题（封面是图，不随页面主题翻变）、读者不可交互
+ * （locked + selectable=false + 外层 pointer-events:none）、不常驻节点标签、无说明栏。
+ */
+import GroupScene from './GroupScene.tsx'
+import { coverFallback } from '../lib/cover-fallback'
+
+interface EngineCover {
+  symbol: string
+  subgroup?: string
+  members?: string
+  view: 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
+  height?: number
+  showLabels?: boolean
+  autoRotate?: boolean
+  nodeScale?: number
+  layout3D?: string
+  cellSize?: number
+  actions?: string
+  lengthScales?: string
+  multiplyType?: 'right' | 'left'
+  path?: string
+  pathColor?: string
+  pathWidth?: number
+}
+
+interface CoverData {
+  img?: string
+  alt?: string
+  engine?: EngineCover
+  poster?: string
+}
+
+interface Props {
+  cover?: string | CoverData | null
+  /** card = 首页横卡右列(静态图/兜底)；head = 详情页头部横卡右列(引擎活图/静态图)；
+   *  hero = 详情页独立大图(仅纯图片封面兜底用) */
+  variant: 'card' | 'hero' | 'head'
+  /** 渐变兜底的取色种子（用 post.id，同一篇永远同色） */
+  seed: string
+  title: string
+}
+
+const { cover, variant, seed, title } = Astro.props
+
+const data: CoverData | null =
+  cover == null ? null : typeof cover === 'string' ? { img: cover } : cover
+
+// 首页横卡展示的静态图：图片封面用 img，引擎封面用 poster（没给则走渐变兜底）
+const imgPath: string | null = data?.img ?? (data?.engine ? (data.poster ?? null) : null)
+const engine = data?.engine ?? null
+const src = imgPath ? import.meta.env.BASE_URL + imgPath.replace(/^\//, '') : null
+const alt = data?.alt ?? `「${title}」封面图`
+
+// 引擎封面的固定语境：深色、锁定、不可选中、无说明栏、不常驻标签。
+// autoRotate 仅 3D 视图缺省开（封面让它"活"着），2D 静置。
+const engineProps = engine
+  ? {
+      ...engine,
+      height: engine.height ?? (variant === 'head' ? 330 : 420),
+      theme: 'dark' as const,
+      locked: true,
+      selectable: false,
+      meta: false,
+      showLabels: engine.showLabels ?? false,
+      autoRotate: engine.autoRotate ?? engine.view === 'cayley3d',
+    }
+  : null
+
+// 确定性渐变兜底（逻辑在 src/lib/cover-fallback.ts，分享图 canvas 共用同一配色）
+const { css: fallbackBg } = coverFallback(seed)
+
+const isCard = variant === 'card'
+const isHead = variant === 'head'
+---
+
+{
+  isCard ? (
+    <div class="post-cover">
+      {src ? (
+        <img src={src} alt={alt} loading="lazy" decoding="async" />
+      ) : (
+        <div class="cover-fallback" style={`background:${fallbackBg}`} aria-hidden="true" />
+      )}
+    </div>
+  ) : isHead ? (
+    engineProps ? (
+      <div class="cover-engine cover-engine-head" style={`height:${engineProps.height}px`} aria-label={alt} role="img">
+        <GroupScene client:only="react" {...engineProps} />
+      </div>
+    ) : src ? (
+      <img class="head-img" src={src} alt={alt} loading="lazy" decoding="async" />
+    ) : null
+  ) : engineProps ? (
+    <div
+      class="cover-engine"
+      style={`min-height:${engineProps.height}px`}
+      aria-label={alt}
+      role="img"
+    >
+      <GroupScene client:only="react" {...engineProps} />
+    </div>
+  ) : (
+    <div class="cover-hero">
+      {src ? (
+        <img src={src} alt={alt} loading="lazy" decoding="async" />
+      ) : (
+        <div class="cover-fallback" style={`background:${fallbackBg}`} aria-hidden="true" />
+      )}
+    </div>
+  )
+}

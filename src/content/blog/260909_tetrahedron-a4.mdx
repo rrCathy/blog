@@ -4,6 +4,16 @@ description: '从一枚四面骰出发，数出它的 12 个旋转，把它们�
 pubDate: 2026-09-09
 updateDate: 2026-09-10
 tags: ['数学', '群论', '几何', '可视化']
+# 封面:A₄ 截角四面体凯莱图;对换边(a=(12)(34))拉长、三循环边(b=(234))压短
+cover:
+  engine:
+    symbol: A4
+    view: cayley3d
+    height: 330
+    actions: '(12)(34),(234)'
+    lengthScales: '(12)(34)=1.4,(234)=0.62'
+    autoRotate: true
+  poster: covers/260909-a4.png
 ---
 
 import GroupScene from '../../components/GroupScene.tsx'

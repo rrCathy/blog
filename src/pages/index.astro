@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content'
 import BaseLayout from '../layouts/BaseLayout.astro'
+import PostCover from '../components/PostCover.astro'
 
 const all = (await getCollection('blog'))
   .filter((p) => !p.data.draft)
@@ -40,16 +41,24 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
       {
         all.map((post) => (
           <li class="post-item" data-tags={post.data.tags.join(',')}>
-            <div class="post-meta">
-              <time datetime={post.data.pubDate.toISOString()}>
-                {fmtDate(post.data.pubDate)}
-              </time>
-              {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+            <div class="post-item-body">
+              <div class="post-meta">
+                <time datetime={post.data.pubDate.toISOString()}>
+                  {fmtDate(post.data.pubDate)}
+                </time>
+                {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+              </div>
+              <h2><a href={base + post.id + '/'}>{post.data.title}</a></h2>
+              {post.data.description && (
+                <p class="post-excerpt">{post.data.description}</p>
+              )}
             </div>
-            <h2><a href={base + post.id + '/'}>{post.data.title}</a></h2>
-            {post.data.description && (
-              <p class="post-excerpt">{post.data.description}</p>
-            )}
+            <PostCover
+              cover={post.data.cover}
+              variant="card"
+              seed={post.id}
+              title={post.data.title}
+            />
           </li>
         ))
       }

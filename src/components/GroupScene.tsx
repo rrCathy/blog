@@ -33,7 +33,8 @@ import {
   wordLengthSphereActions,
   COLOR_PALETTE,
 } from '@groupviz/core'
-import type { Group, GroupElement, CayleyPathHighlight } from '@groupviz/core'
+import type { Group, GroupElement, CayleyPathHighlight, Layout3D, CayleyActionParam } from '@groupviz/core'
+import { LAYOUTS_3D } from '@groupviz/core'
 
 /** 说明：'coset' 需要额外子群/陪集数据，暂不提供一键封装 */
 export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
@@ -64,12 +65,15 @@ export interface GroupSceneProps {
   nodeScale?: number
   /**
    * 3D：布局形状（透传引擎 `layout3D`）。缺省按群自动选。
+   * 可传引擎任意预设（LAYOUTS_3D），如 A₄ 'truncatedTetrahedron'、
+   * S₄ 的 'truncatedOctahedron2'（2 生成元缺省）/ 'truncatedOctahedron3'（3 相邻对换版）；
+   * 写错的名字自动退回缺省形状。
    * 传 'wordLengthSphere' 走**字长球**：元素按「字长 = 相邻对换下的最短生成元个数」
    * 分层铺在同心圆上，北极 e、南极 w₀、同层同色。作用边会自动补成相邻对换集
    * （传了 actions 也以自动集为准，分层才成立）。
    * 仅 n = 4/5 的 one-line 置换群可用，其余群布局返回 null 会退回缺省形状。
    */
-  layout3D?: 'wordLengthSphere'
+  layout3D?: string
   /** 乘法表：单元格边长 px(默认 50)。调大可缓解 (12)(34) 这类长记号的表头重叠 */
   cellSize?: number
 
@@ -80,6 +84,12 @@ export interface GroupSceneProps {
    * 这是凯莱图依赖生成元选取的接口——换一组写法就换一张图。
    */
   actions?: string
+  /**
+   * 逐生成元边长倍率（透传引擎 CayleyActionParam.lengthScale）：'元素引用=倍率' 逗号分隔，
+   * 如 '(12)(34)=1.4,(234)=0.6'。倍率 0.3–3，固定几何布局经「长度约束松弛」后处理，
+   * 力导向布局作为弹簧静止长度倍率。须与 actions 同用（按 actions 里的作用元素生效）。
+   */
+  lengthScales?: string
   /** 边的乘法方向：右乘 x→x·s（默认）或左乘 x→s·x */
   multiplyType?: 'right' | 'left'
 
@@ -97,6 +107,14 @@ export interface GroupSceneProps {
   pathAnimate?: boolean
   /** 悬停节点时显示经过次序徽标 ① ② ③ … */
   pathShowOrder?: boolean
+  /**
+   * 2D 凯莱图边弯曲度倍率（透传引擎 edgeCurvature）。缺省 1（自适应弧）；
+   * 0 = 笔直（S₃ 环的直边六边形样式就是它）；2 = 更弯。
+   */
+  edgeCurvature?: number
+
+  /** 是否显示底部说明栏（群记号 chip + caption + 提示）。缺省 true；封面等纯图语境传 false */
+  meta?: boolean
 
   // ── 对称性视图专属 ──
   /** 是否开启元素作用演示(默认 true)。false = 只显示静态多面体 */
@@ -214,12 +232,15 @@ export default function GroupScene({
   layout3D,
   cellSize,
   actions,
+  lengthScales,
   multiplyType,
   path,
   pathColor,
   pathWidth,
   pathAnimate,
   pathShowOrder,
+  edgeCurvature,
+  meta = true,
   showAction,
   actionElement,
   picker = false,
@@ -290,6 +311,27 @@ export default function GroupScene({
   )
   const isWordLengthSphere = layout3D === 'wordLengthSphere' && sphereActions != null
 
+  // layout3D：必须在引擎预设列表内才透传（写错的名字自动退回缺省形状）
+  const layout3DProp = useMemo<Layout3D | undefined>(() => {
+    if (!layout3D) return undefined
+    return (LAYOUTS_3D as readonly string[]).includes(layout3D) ? (layout3D as Layout3D) : undefined
+  }, [layout3D])
+
+  // 逐生成元边长倍率：'元素引用=倍率' → 元素 id → 倍率。字长球布局边集被自动替换，不生效。
+  const lengthScaleMap = useMemo(() => {
+    if (!lengthScales || !group) return null
+    const m = new Map<string, number>()
+    for (const part of lengthScales.split(',')) {
+      const eq = part.indexOf('=')
+      if (eq < 0) continue
+      const ref = part.slice(0, eq).trim()
+      const v = Number(part.slice(eq + 1).trim())
+      const el = resolveEl(group, ref)
+      if (el && Number.isFinite(v) && v > 0) m.set(el.id, v)
+    }
+    return m.size ? m : null
+  }, [lengthScales, group])
+
   // 作用的元素：接受 label / id / 循环记号，解析成引擎要的元素 id。
   // 未命中项丢弃（交给引擎用自己的生成元兜底）；actions 缺省则不传，行为与从前一致。
   const actionParams = useMemo(() => {
@@ -298,14 +340,20 @@ export default function GroupScene({
     if (!actions) return undefined
     const refs = actions.split(',').map(s => s.trim()).filter(Boolean)
     const params = refs
-      .map((ref, i) => {
+      .map((ref, i): CayleyActionParam | null => {
         const el = resolveEl(group, ref)
         if (!el) return null
-        return { elementId: el.id, enabled: true, color: COLOR_PALETTE[i % COLOR_PALETTE.length] }
+        const scale = lengthScaleMap?.get(el.id)
+        return {
+          elementId: el.id,
+          enabled: true,
+          color: COLOR_PALETTE[i % COLOR_PALETTE.length],
+          ...(scale != null ? { lengthScale: scale } : {}),
+        }
       })
-      .filter((p): p is { elementId: string; enabled: boolean; color: string } => p != null)
+      .filter((p): p is CayleyActionParam => p != null)
     return params.length ? params : undefined
-  }, [group, actions, isWordLengthSphere, sphereActions])
+  }, [group, actions, lengthScaleMap, isWordLengthSphere, sphereActions])
 
   // 路径高亮（VCL）：逗号分隔的元素引用序列，或 'sjt' 自动生成 SJT 哈密顿回路。
   const pathHighlight = useMemo<CayleyPathHighlight | null>(() => {
@@ -503,6 +551,7 @@ export default function GroupScene({
                 actions={actionParams}
                 multiplyType={multiplyType}
                 nodeRadius={cayleyNodeRadius}
+                edgeCurvature={edgeCurvature}
                 pathHighlight={pathHighlight}
               />
             )}
@@ -516,7 +565,7 @@ export default function GroupScene({
                 autoRotate={autoRotate}
                 locked={locked}
                 nodeScale={isWordLengthSphere ? undefined : (nodeScale ?? (isNarrow ? 0.7 : undefined))}
-                layout3D={layout3D}
+                layout3D={layout3DProp}
                 actions={actionParams}
                 multiplyType={multiplyType}
                 pathHighlight={pathHighlight}
@@ -540,17 +589,19 @@ export default function GroupScene({
         {/* 悬停气泡：2D 图形视图由引擎按锚点就地渲染（乘法表无锚点，改在底部信息栏显示） */}
         {state.hoverBubble}
       </div>
-      <div className="gv-scene-meta">
-        <span className="gv-scene-chip">
-          {members && subgroup ? subgroup : symbol} · {isWordLengthSphere ? WORD_LENGTH_LABEL : VIEW_LABEL[view]}
-        </span>
-        {caption ? (
-          <span className="gv-scene-caption" title={caption}>
-            {caption}
+      {meta && (
+        <div className="gv-scene-meta">
+          <span className="gv-scene-chip">
+            {members && subgroup ? subgroup : symbol} · {isWordLengthSphere ? WORD_LENGTH_LABEL : VIEW_LABEL[view]}
           </span>
-        ) : null}
-        <span className="gv-scene-hint">{activeHint}</span>
-      </div>
+          {caption ? (
+            <span className="gv-scene-caption" title={caption}>
+              {caption}
+            </span>
+          ) : null}
+          <span className="gv-scene-hint">{activeHint}</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -7,13 +7,17 @@ interface Props {
   title: string
   description?: string
   pageTitle?: string
+  /** 社交分享图(og:image)；传 base 下的相对路径(如 '/blog/covers/x.png') */
+  image?: string
 }
 
-const { title, description = '数学笔记 · 技术记录', pageTitle } = Astro.props
+const { title, description = '数学笔记 · 技术记录', pageTitle, image } = Astro.props
 const fullTitle = pageTitle ? `${pageTitle} · ${title}` : title
 const url = Astro.url
 // base 前缀(如 /blog/)，结尾带 '/'
 const base = import.meta.env.BASE_URL
+// og:image 转绝对地址(分享卡片要求绝对 URL)
+const ogImage = image ? new URL(image, Astro.site).toString() : undefined
 ---
 
 <!doctype html>
@@ -28,6 +32,7 @@ const base = import.meta.env.BASE_URL
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={url} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
     <link rel="icon" type="image/svg+xml" href={base + 'favicon.svg'} />
     <link
       rel="alternate"
