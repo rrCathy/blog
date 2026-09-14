@@ -21,7 +21,7 @@ interface EngineCover {
   symbol: string
   subgroup?: string
   members?: string
-  view: 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
+  view: 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry' | 'action'
   height?: number
   showLabels?: boolean
   autoRotate?: boolean
@@ -35,6 +35,9 @@ interface EngineCover {
   pathColor?: string
   pathWidth?: number
   edgeCurvature?: number
+  actionKind?: 'conjugation' | 'regular'
+  subsets?: string
+  nodeRadius?: number
 }
 
 interface CoverData {

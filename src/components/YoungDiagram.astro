@@ -1,0 +1,173 @@
+---
+/**
+ * 杨图（Young diagram）—— 纯静态 SVG。
+ * 杨图不在 GroupViz 引擎的可视化范围里（引擎画的是群论图形），所以这里手绘：
+ * 它是方格图，用 SVG 比用引擎更直接。
+ *
+ * shape  分拆，降序数组，如 [4, 2, 1]
+ * size   单格边长（SVG 用户单位），缺省 36
+ * hooks  是否在每格写下钩长 h(i,j) = 同行右侧格数 + 同列下方格数 + 1
+ * transpose  并排再画一张转置（共轭分拆），中间标箭头
+ * caption    图下说明
+ *
+ * 配色全走主题变量，深浅色自动跟随。
+ */
+interface Props {
+  shape: number[]
+  size?: number
+  hooks?: boolean
+  transpose?: boolean
+  caption?: string
+}
+
+const { shape, size = 36, hooks = false, transpose = false, caption } = Astro.props
+
+const rows = shape.length
+const cols = Math.max(...shape)
+/** 共轭（转置）分拆：第 j 列的高度 = 长度 > j 的行数 */
+const conj = Array.from({ length: cols }, (_, j) => shape.filter((r) => r > j).length)
+
+/** 钩长：同行右侧格数 + 同列下方格数 + 1 */
+const hook = (i: number, j: number) => shape[i] + conj[j] - i - j - 1
+
+const W1 = cols * size
+const H1 = rows * size
+const W2 = conj.length * size
+/** 转置图的行数就是原图的列数，高度按行数算（曾误写成 max(conj)，末行会被裁掉） */
+const H2 = conj.length * size
+const GAP = 74
+const TOTAL_W = transpose ? W1 + GAP + W2 : W1
+
+/** 一格 */
+const cell = (i: number, j: number, dx: number) => ({
+  x: dx + j * size,
+  y: i * size,
+})
+
+const label = (s: number[]) => '(' + s.join(',') + ')'
+const aria = transpose
+  ? `杨图 ${label(shape)} 与它的转置 ${label(conj)}`
+  : hooks
+    ? `杨图 ${label(shape)}，每格标注钩长`
+    : `杨图 ${label(shape)}`
+---
+
+<figure class="young" style={`--yd-max:${TOTAL_W}px`}>
+  <svg viewBox={`0 0 ${TOTAL_W} ${transpose ? Math.max(H1, H2) : H1}`} role="img" aria-label={aria}>
+    <defs>
+      <marker
+        id="yd-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--text-dim)"></path>
+      </marker>
+    </defs>
+
+    {
+      shape.map((r, i) =>
+        Array.from({ length: r }, (_, j) => {
+          const c = cell(i, j, 0)
+          return (
+            <>
+              <rect
+                x={c.x}
+                y={c.y}
+                width={size}
+                height={size}
+                fill="var(--bg-soft)"
+                stroke="var(--border)"
+                stroke-width="1"
+              />
+              {hooks && (
+                <text
+                  x={c.x + size / 2}
+                  y={c.y + size / 2}
+                  text-anchor="middle"
+                  dominant-baseline="central"
+                  font-size={Math.round(size * 0.38)}
+                  fill="var(--text)"
+                >
+                  {hook(i, j)}
+                </text>
+              )}
+            </>
+          )
+        }),
+      )
+    }
+
+    {
+      transpose && (
+        <>
+          <line
+            x1={W1 + 10}
+            y1={H1 / 2}
+            x2={W1 + GAP - 24}
+            y2={H1 / 2}
+            stroke="var(--text-dim)"
+            stroke-width="1.4"
+            marker-end="url(#yd-arrow)"
+          />
+          <text
+            x={W1 + GAP / 2 - 4}
+            y={H1 / 2 + 18}
+            text-anchor="middle"
+            font-size="12"
+            fill="var(--text-dim)"
+          >
+            转置
+          </text>
+          {conj.map((r, i) =>
+            Array.from({ length: r }, (_, j) => {
+              const c = cell(i, j, W1 + GAP)
+              return (
+                <rect
+                  x={c.x}
+                  y={c.y}
+                  width={size}
+                  height={size}
+                  fill="var(--bg-soft)"
+                  stroke="var(--border)"
+                  stroke-width="1"
+                />
+              )
+            }),
+          )}
+        </>
+      )
+    }
+  </svg>
+  {
+    caption ? (
+      <figcaption set:html={caption} />
+    ) : (
+      <figcaption>
+        {transpose ? `λ = ${label(shape)} 与它的转置 λ′ = ${label(conj)}` : `λ = ${label(shape)}`}
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .young {
+    margin: 1.6rem 0;
+  }
+  .young svg {
+    width: 100%;
+    max-width: var(--yd-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .young figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

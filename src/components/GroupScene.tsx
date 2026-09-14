@@ -23,6 +23,7 @@ import {
   TableView,
   Cayley3DScene,
   SymmetryViewScene,
+  ActionScene,
   useSceneState,
 } from '@groupviz/react'
 import {
@@ -31,13 +32,26 @@ import {
   resolveElement as resolveEl,
   elementOrder as orderOf,
   wordLengthSphereActions,
+  buildActionComputation,
   COLOR_PALETTE,
+  SUBSET_COLORS,
 } from '@groupviz/core'
-import type { Group, GroupElement, CayleyPathHighlight, Layout3D, CayleyActionParam, CayleyShape2D } from '@groupviz/core'
+import type {
+  Group,
+  GroupElement,
+  CayleyPathHighlight,
+  Layout3D,
+  CayleyActionParam,
+  CayleyShape2D,
+  GroupActionComputation,
+} from '@groupviz/core'
 import { LAYOUTS_3D, CAYLEY_SHAPES_2D } from '@groupviz/core'
 
 /** 说明：'coset' 需要额外子群/陪集数据，暂不提供一键封装 */
-export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry'
+export type SceneKind = 'set' | 'cycle' | 'cayley' | 'cayley3d' | 'table' | 'symmetry' | 'action'
+
+/** 群作用视图的作用来源；只放博客用得上的两种（另三种要子群/陪集数据） */
+export type ActionKind = 'conjugation' | 'regular'
 
 export interface GroupSceneProps {
   /** 群的 symbol，如 'A4'、'C_{6}'、'D_{8}'、'S_{4}'、'A5'，传给 createGroupFromSymbol */
@@ -121,6 +135,32 @@ export interface GroupSceneProps {
    */
   shape?: string
 
+  // ── 群作用视图专属（view: 'action'）──
+  /**
+   * 作用来源。'conjugation' = 共轭作用 g·x = gxg⁻¹，作用在群自身的元素集合上，
+   * **轨道就是共轭类**，稳定子是中心化子（点一个元素，底部给出它的稳定子）。
+   * 'regular' = 左正则作用。缺省 'conjugation'。
+   */
+  actionKind?: ActionKind
+
+  /**
+   * 元素子集着色：`颜色:元素引用,元素引用; 颜色:…`。
+   * 逗号分隔同一组内的元素引用，分号分隔组。颜色写调色板索引 0–7，
+   * 或直接写 hex（'#ff6b6b'）。元素引用接受 label / id / 循环记号，写错会
+   * console.warn 并丢弃。set / cycle / table 走子集着色，cayley3d 走子集高亮。
+   * 颜色缺省按组序取 SUBSET_COLORS。
+   */
+  subsets?: string
+
+  /**
+   * 2D 节点半径（px），集合 / 循环 / 凯莱三视图通用。
+   * 缺省时凯莱图按容器宽度自动缩（`clamp(round(w*0.027),12,22)`），
+   * 集合与循环图交回引擎缺省值。
+   * 元素名长的群要调大它，否则标签会溢出节点被裁（实测 S₄ 的 `(12)(34)`
+   * 在缺省半径下显示成 `12)(34`，给 30 才完整）。
+   */
+  nodeRadius?: number
+
   /** 是否显示底部说明栏（群记号 chip + caption + 提示）。缺省 true；封面等纯图语境传 false */
   meta?: boolean
 
@@ -152,6 +192,7 @@ const VIEW_LABEL: Record<SceneKind, string> = {
   cayley3d: '凯莱图 · 3D',
   table: '乘法表',
   symmetry: '对称性视图',
+  action: '群作用',
 }
 
 /** 字长球布局下的视图名（只在 S₄/S₅ + layout3D 命中时用） */
@@ -197,6 +238,7 @@ const DEFAULT_HINT: Record<SceneKind, string> = {
   cayley3d: '拖动旋转 · 滚轮缩放 · 点击选中',
   table: '点击行列/格点查看',
   symmetry: '红轴 = 旋转轴 · 黄球 = 固定顶点 · 青球 = 棱中点',
+  action: '悬停查看元素 · 点一个元素看它的稳定子 · 拖动平移',
 }
 
 /** 按群类型给"阶"配可读的角色名(用于操作台分组) */
@@ -249,6 +291,9 @@ export default function GroupScene({
   pathShowOrder,
   edgeCurvature,
   shape,
+  nodeRadius,
+  actionKind = 'conjugation',
+  subsets,
   meta = true,
   showAction,
   actionElement,
@@ -334,6 +379,62 @@ export default function GroupScene({
       : undefined
   }, [shape])
 
+  // 群作用（view: 'action'）：引擎算作用的置换与轨道。
+  // 共轭作用作用在群自身元素上，轨道就是共轭类、稳定子是中心化子。
+  const actionComputation = useMemo<GroupActionComputation | null>(() => {
+    if (!group || view !== 'action') return null
+    const built = buildActionComputation(group, { kind: actionKind })
+    if (!built.computation) {
+      console.warn(`[GroupScene] ${actionKind} 作用构造失败`, built.error)
+      return null
+    }
+    return built.computation
+  }, [group, view, actionKind])
+
+  // 元素子集着色：'颜色:元素引用,…; 颜色:…'。
+  // 颜色写调色板索引 0–7 或直接写 hex；不写颜色则按组序自动分配。
+  const subsetList = useMemo(() => {
+    if (!group || !subsets) return undefined
+    const out: { elementIds: string[]; color: string }[] = []
+    let auto = 0
+    for (const chunk of subsets.split(';')) {
+      const raw = chunk.trim()
+      if (!raw) continue
+      const colon = raw.indexOf(':')
+      const colorPart = colon >= 0 ? raw.slice(0, colon).trim() : ''
+      const refPart = colon >= 0 ? raw.slice(colon + 1) : raw
+      const color = /^\d+$/.test(colorPart)
+        ? SUBSET_COLORS[Number(colorPart) % SUBSET_COLORS.length]
+        : colorPart || SUBSET_COLORS[auto % SUBSET_COLORS.length]
+      auto++
+      const ids = refPart
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(ref => resolveEl(group, ref))
+        .filter((e): e is GroupElement => e != null)
+        .map(e => e.id)
+      if (ids.length) out.push({ elementIds: ids, color })
+    }
+    return out.length ? out : undefined
+  }, [group, subsets])
+
+  // TableView 的子集类型更重（带 id / label / 子群标记），从 subsetList 派生一份。
+  // 这里只做「平铺分组着色」，不声明子群语义，所以两个 isSubgroup 都给 false。
+  const tableSubsets = useMemo(
+    () =>
+      subsetList?.map((s, i) => ({
+        id: `subset-${i}`,
+        elementIds: s.elementIds,
+        label: `子集 ${i + 1}`,
+        color: s.color,
+        isSubgroup: false,
+        isNormalSubgroup: false,
+        type: 'subset' as const,
+      })),
+    [subsetList],
+  )
+
   // 逐生成元边长倍率：'元素引用=倍率' → 元素 id → 倍率。字长球布局边集被自动替换，不生效。
   const lengthScaleMap = useMemo(() => {
     if (!lengthScales || !group) return null
@@ -408,6 +509,22 @@ export default function GroupScene({
     () => (selectable ? state.sceneProps : { ...state.sceneProps, onSelect: () => {} }),
     [selectable, state.sceneProps],
   )
+
+  // ActionScene 的选中是「集合元素索引」，2D 四件套用的是元素 id，这里互换。
+  // 群作用作用在群自身元素上，索引即 group.elements 的下标。
+  const actionSelectedIndex = useMemo(() => {
+    if (!group || view !== 'action') return null
+    const first = [...state.selectedElements][0]
+    if (first == null) return null
+    const idx = group.elements.findIndex(el => el.id === first)
+    return idx >= 0 ? idx : null
+  }, [group, view, state.selectedElements])
+
+  const handleActionSelect = (x: number | null) => {
+    if (!group) return
+    if (x == null) state.clearSelection()
+    else if (group.elements[x]) state.select(group.elements[x].id)
+  }
 
   // 凯莱图节点：引擎 nodeRadius 缺省 28 是绝对值（viewBox≈容器像素），
   // 桌面 ~750px 宽下节点视觉占比偏大，2D 里会盖住边。统一按实测宽度缩到
@@ -496,7 +613,10 @@ export default function GroupScene({
       : isWordLengthSphere
         ? '拖动旋转 · 滚轮缩放 · 同色同字长（相邻对换下的最短生成元个数）'
         : DEFAULT_HINT[view])
-  const themeAttr = theme ? { 'data-theme': theme } : {}
+  // 容器级主题：总是显式标注。引擎的 ActionScene / 操作台等读写 CSS 变量
+  // （--bg-canvas 等），只认 [data-theme]；页面若无 html[data-theme]（如独立
+  // 测试页），不标注就会回落到 theme.css 的深色默认值。
+  const themeAttr = { 'data-theme': isDark ? 'dark' : 'light' }
 
   return (
     <div className="gv-scene" {...themeAttr}>
@@ -557,9 +677,17 @@ export default function GroupScene({
         ) : (
           <I18nProvider>
             {view === 'set' && (
-              <SetView group={group} {...sceneProps} showLabels={sceneShowLabels} />
+              <SetView
+                group={group}
+                {...sceneProps}
+                showLabels={sceneShowLabels}
+                nodeRadius={nodeRadius}
+                subsets={subsetList}
+              />
             )}
-            {view === 'cycle' && <CycleView group={group} {...sceneProps} />}
+            {view === 'cycle' && (
+              <CycleView group={group} {...sceneProps} nodeRadius={nodeRadius} subsets={subsetList} />
+            )}
             {view === 'cayley' && (
               <CayleyView
                 group={group}
@@ -567,13 +695,15 @@ export default function GroupScene({
                 showLabels={sceneShowLabels}
                 actions={actionParams}
                 multiplyType={multiplyType}
-                nodeRadius={cayleyNodeRadius}
+                nodeRadius={nodeRadius ?? cayleyNodeRadius}
                 edgeCurvature={edgeCurvature}
                 shape2D={shapeProp}
                 pathHighlight={pathHighlight}
               />
             )}
-            {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
+            {view === 'table' && (
+              <TableView group={group} {...sceneProps} cellSize={cellSize} subsets={tableSubsets} />
+            )}
             {/* 3D canvas 背景由引擎按 theme 决定（Cayley3DSceneProps.theme，
                 缺省回落 'dark'）。壳原先漏传这个 prop，导致浅色主题下 3D 凯莱图
                 仍是黑底，而 2D 视图走 sceneProps.theme 是对的——同一页两种主题。 */}
@@ -591,6 +721,21 @@ export default function GroupScene({
                 actions={actionParams}
                 multiplyType={multiplyType}
                 pathHighlight={pathHighlight}
+                subsetHighlights={subsetList}
+              />
+            )}
+            {view === 'action' && actionComputation && (
+              <ActionScene
+                group={group}
+                kind={actionKind}
+                computation={actionComputation}
+                showLabels={sceneShowLabels}
+                selectedElement={actionSelectedIndex}
+                onSelectedElementChange={selectable ? handleActionSelect : undefined}
+                onHover={sceneProps.onHover}
+                canvasTransform={sceneProps.canvasTransform}
+                viewBoxSize={sceneProps.viewBoxSize}
+                theme={bubbleTheme}
               />
             )}
             {view === 'symmetry' && (
@@ -614,7 +759,12 @@ export default function GroupScene({
       {meta && (
         <div className="gv-scene-meta">
           <span className="gv-scene-chip">
-            {members && subgroup ? subgroup : symbol} · {isWordLengthSphere ? WORD_LENGTH_LABEL : VIEW_LABEL[view]}
+            {members && subgroup ? subgroup : symbol} ·{' '}
+            {isWordLengthSphere
+              ? WORD_LENGTH_LABEL
+              : view === 'action'
+                ? actionKind === 'conjugation' ? '共轭作用' : '左正则作用'
+                : VIEW_LABEL[view]}
           </span>
           {caption ? (
             <span className="gv-scene-caption" title={caption}>

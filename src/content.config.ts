@@ -10,7 +10,7 @@ const engineCoverSchema = z.object({
   symbol: z.string(),
   subgroup: z.string().optional(),
   members: z.string().optional(),
-  view: z.enum(['set', 'cycle', 'cayley', 'cayley3d', 'table', 'symmetry']),
+  view: z.enum(['set', 'cycle', 'cayley', 'cayley3d', 'table', 'symmetry', 'action']),
   /** 画布逻辑高度 px（详情页 hero 用，缺省 420） */
   height: z.number().optional(),
   showLabels: z.boolean().optional(),
@@ -26,6 +26,12 @@ const engineCoverSchema = z.object({
   lengthScales: z.string().optional(),
   /** 2D 凯莱图边弯曲度倍率；0 = 笔直（如 S₃ 直边环），缺省 1 自适应弧 */
   edgeCurvature: z.number().optional(),
+  /** 群作用视图（view: 'action'）的作用来源：'conjugation' 共轭作用（轨道 = 共轭类）/ 'regular'；缺省 conjugation */
+  actionKind: z.enum(['conjugation', 'regular']).optional(),
+  /** 元素子集着色：'颜色:元素引用,…; 颜色:…'，颜色写调色板索引 0–7 或 hex（如 '#ff6b6b'） */
+  subsets: z.string().optional(),
+  /** 2D 节点半径 px；缺省凯莱图按容器宽度自缩，集合与循环图交引擎缺省值 */
+  nodeRadius: z.number().optional(),
   multiplyType: z.enum(['right', 'left']).optional(),
   path: z.string().optional(),
   pathColor: z.string().optional(),
