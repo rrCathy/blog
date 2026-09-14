@@ -69,6 +69,16 @@ const blog = defineCollection({
     updateDate: z.coerce.date().optional(),
     /** 每篇独立配置 tags；展示侧按出现顺序自动聚合 */
     tags: z.array(z.string()).default([]),
+    /**
+     * 所属系列名（如 '凯莱图'）。同名的文章构成一个系列：构建期聚合、组内按 pubDate
+     * 升序排列，已发布(draft:false)的才进系列。见 src/lib/series.ts。
+     */
+    series: z.string().optional(),
+    /**
+     * 系列页 URL 段（可选，缺省用 series 名本身）。同一系列的每篇必须写同一个值——
+     * 构建期会校验，不一致直接报错（否则同一系列会裂成两个页面）。
+     */
+    seriesSlug: z.string().optional(),
     /** true = 草稿，不进列表与 RSS */
     draft: z.boolean().default(false),
     /** 封面/头图（首页横卡右侧 + 详情页 hero），见 coverSchema 注释 */

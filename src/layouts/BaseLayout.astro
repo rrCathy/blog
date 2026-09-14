@@ -73,8 +73,36 @@ const ogImage = image ? new URL(image, Astro.site).toString() : undefined
             aria-label="切换浅色/深色主题"
             title="切换浅色/深色主题"
           >
-            <span class="icon-sun" aria-hidden="true">☀</span>
-            <span class="icon-moon" aria-hidden="true">☾</span>
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4.1"></circle>
+              <path
+                d="M12 2.4v2.3M12 19.3v2.3M2.4 12h2.3M19.3 12h2.3M5.2 5.2l1.65 1.65M17.15 17.15l1.65 1.65M18.8 5.2l-1.65 1.65M6.85 17.15 5.2 18.8"
+              ></path>
+            </svg>
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20.4 14.6A8.5 8.5 0 0 1 9.4 3.6a8.5 8.5 0 1 0 11 11Z"></path>
+            </svg>
           </button>
         </nav>
       </div>

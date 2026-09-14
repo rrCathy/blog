@@ -2,12 +2,17 @@
 import { getCollection } from 'astro:content'
 import BaseLayout from '../layouts/BaseLayout.astro'
 import PostCover from '../components/PostCover.astro'
+import { tagTone } from '../lib/tag-tone'
+import { getAllSeries } from '../lib/series'
 
 const all = (await getCollection('blog'))
   .filter((p) => !p.data.draft)
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
 
 const base = import.meta.env.BASE_URL
+
+// 系列入口：点到的是各系列的聚合页（系列页里按发布顺序排全篇）
+const seriesList = await getAllSeries()
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -29,9 +34,25 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
       <p class="sub">数学笔记与开发记录 · 文章里的插图是可以交互的活图 —— 试试悬停与拖拽。</p>
     </section>
 
+    {
+      seriesList.length > 0 && (
+        <div class="series-strip">
+          <span class="series-strip-label">系列</span>
+          <div class="series-chips">
+            {seriesList.map((s) => (
+              <a class="series-chip" href={base + 'series/' + s.slug + '/'}>
+                <span class="series-chip-name">{s.name}</span>
+                <span class="series-chip-count">{s.posts.length} 篇</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
     <div class="tag-filter" aria-label="按标签筛选文章">
       {tags.map((t) => (
-        <button type="button" class="tag-chip" data-tag={t} aria-pressed="false">
+        <button type="button" class="tag-chip" data-tag={t} data-tone={tagTone(t)} aria-pressed="false">
           #{t}
         </button>
       ))}
@@ -46,7 +67,9 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
                 <time datetime={post.data.pubDate.toISOString()}>
                   {fmtDate(post.data.pubDate)}
                 </time>
-                {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+                {post.data.tags.map((t) => (
+                  <span class="tag" data-tone={tagTone(t)}>{t}</span>
+                ))}
               </div>
               <h2><a href={base + post.id + '/'}>{post.data.title}</a></h2>
               {post.data.description && (

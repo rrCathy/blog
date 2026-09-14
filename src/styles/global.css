@@ -25,6 +25,20 @@
   --content-w: 46rem;
   /* 页面左右安全边距:所有容器共用,窄屏下统一收窄 */
   --gutter: 1.5rem;
+  /* 标签色调:与 @groupviz 引擎调色板同源(见 src/lib/tag-tone.ts),
+     分浅/深两套——引擎原色是给深色画布上的图形用的,作正文小字偏浅 */
+  --tag-teal-ink: #0b6e65;
+  --tag-teal-bg: rgba(14, 148, 136, 0.12);
+  --tag-amber-ink: #9a5b06;
+  --tag-amber-bg: rgba(217, 119, 6, 0.12);
+  --tag-indigo-ink: #4338ca;
+  --tag-indigo-bg: rgba(99, 102, 241, 0.12);
+  --tag-blue-ink: #1d4ed8;
+  --tag-blue-bg: rgba(59, 130, 246, 0.12);
+  --tag-purple-ink: #7e22ce;
+  --tag-purple-bg: rgba(168, 85, 247, 0.12);
+  --tag-coral-ink: #b3401d;
+  --tag-coral-bg: rgba(249, 115, 22, 0.12);
 }
 
 /* 深色主题:变量覆盖由 html[data-theme] 驱动 */
@@ -40,6 +54,18 @@ html[data-theme='dark'] {
   --accent-soft: rgba(78, 205, 196, 0.14);
   --accent-ink: #63d6cd;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+  --tag-teal-ink: #5eddd4;
+  --tag-teal-bg: rgba(78, 205, 196, 0.16);
+  --tag-amber-ink: #fbbf24;
+  --tag-amber-bg: rgba(255, 217, 61, 0.16);
+  --tag-indigo-ink: #a5b4fc;
+  --tag-indigo-bg: rgba(129, 140, 248, 0.18);
+  --tag-blue-ink: #93c5fd;
+  --tag-blue-bg: rgba(96, 165, 250, 0.18);
+  --tag-purple-ink: #d8b4fe;
+  --tag-purple-bg: rgba(192, 132, 252, 0.18);
+  --tag-coral-ink: #fdba74;
+  --tag-coral-bg: rgba(249, 115, 22, 0.18);
 }
 
 * {
@@ -170,6 +196,48 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   font-size: 1.05rem;
   margin: 0;
 }
+/* ---------- 首页系列入口（跳到各系列聚合页） ---------- */
+/* 与标签筛选并列但视觉更重：系列是「成组、有序」的导航维度，值得比标签更显眼 */
+.series-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  padding: 0 0 1rem;
+}
+.series-strip-label {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+.series-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.series-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.series-chip:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+}
+.series-chip-count {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
 .tag-filter {
   display: flex;
   flex-wrap: wrap;
@@ -184,7 +252,8 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   border-radius: 999px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
-  color: var(--text-soft);
+  /* 未激活时文字用该标签的色调(与卡片标签同色,构成筛选对应关系),底色保持中性 */
+  color: var(--tag-ink, var(--text-soft));
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
@@ -246,6 +315,8 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   margin: 0 0 0.4rem;
   font-size: 1.28rem;
   letter-spacing: -0.015em;
+  /* 窄列下中文标题容易断成「9 字 + 1 字」的孤字行（首页/系列页卡片共用这条） */
+  text-wrap: balance;
 }
 .post-item h2 a {
   color: var(--text);
@@ -291,6 +362,19 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   -webkit-mask-image: linear-gradient(to left, #000 60%, transparent 99%);
   mask-image: linear-gradient(to left, #000 60%, transparent 99%);
 }
+/* 双海报按主题切换:存在 -light 版的文章,浅色主题显示浅色海报、深色主题显示
+   深色海报;没有 -light 版的文章只有一张图、不带这些 class,不受影响。
+   注意用 img.only-dark 提升特异性——.post-cover img / .cover-hero img 都写了
+   display:block(0,1,1),裸 class(0,1,0)压不过它们 */
+img.only-dark {
+  display: none;
+}
+html[data-theme='dark'] img.only-dark {
+  display: block;
+}
+html[data-theme='dark'] img.only-light {
+  display: none;
+}
 /* 详情页 hero:静态图片/渐变占位 */
 .cover-hero {
   aspect-ratio: 21 / 9;
@@ -324,11 +408,13 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   display: none !important;
 }
 
-/* ---------- 详情页头部横卡(与首页横卡同构,更大) ---------- */
-/* 文字左(meta+标题),封面右,封面左缘渐隐融进卡底 */
+/* ---------- 详情页头部横卡（与首页横卡同版式，区别仅是没有摘要） ---------- */
+/* 文字左(meta+标题，垂直居中)，封面右满铺，左缘渐隐融进卡底。
+   高度由 min-height 176px（同首页）+ 内容决定，不再单独撑高 */
 .article-header.head-card {
   display: flex;
   align-items: stretch;
+  min-height: 176px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
@@ -339,45 +425,37 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
 .head-card-text {
   flex: 1;
   min-width: 0;
-  padding: 1.7rem 0 1.7rem 1.7rem;
-}
-.head-card-text h1 {
-  font-size: clamp(1.75rem, 3.6vw, 2.35rem);
-  line-height: 1.18;
-  letter-spacing: -0.025em;
-  margin: 0.7rem 0 0;
-}
-.head-card-cover {
-  flex: 0 0 45%;
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 320px;
+  padding: 1.15rem 0 1.15rem 1.35rem;
 }
-/* 引擎活图右列:去边框圆角(卡自带),左缘渐隐;活图本身锁定不可交互 */
-.head-card-cover .cover-engine-head {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-  -webkit-mask-image: linear-gradient(to left, #000 55%, transparent 98%);
-  mask-image: linear-gradient(to left, #000 55%, transparent 98%);
+.head-card-text h1 {
+  font-size: clamp(1.5rem, 3vw, 1.8rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0.45rem 0 0;
+  /* 中文标题默认可以在任意字间断行，容易留下「9 字 + 1 字」的孤字行；
+     交给浏览器做断行均衡（长标题退化成两行时也更整齐） */
+  text-wrap: balance;
 }
-.head-card-cover .cover-engine-head .gv-scene {
-  margin: 0;
-  border: none;
-  border-radius: 0;
+.head-card-cover {
+  flex: 0 0 40%;
+  max-width: 330px;
+  position: relative;
+  overflow: hidden;
 }
-/* 静态图右列:同样左缘渐隐 */
+/* 封面满铺 + 左缘渐隐，与首页 .post-cover img 完全同款：
+   海报自身的画布底色(#f4f4f7)与卡底(#fff)的轻微色差靠渐隐收进卡片，
+   不再用留白/径向遮罩——那会把图的矩形边界暴露出来 */
 .head-card-cover .head-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  -webkit-mask-image: linear-gradient(to left, #000 55%, transparent 98%);
-  mask-image: linear-gradient(to left, #000 55%, transparent 98%);
+  -webkit-mask-image: linear-gradient(to left, #000 60%, transparent 99%);
+  mask-image: linear-gradient(to left, #000 60%, transparent 99%);
 }
 .post-meta {
   font-size: 0.85rem;
@@ -388,9 +466,38 @@ html:not([data-theme='dark']) .theme-toggle .icon-moon {
   align-items: center;
   margin-bottom: 0.35rem;
 }
+/* 标签:每个标签按 tagTone() 拿到一个 data-tone,色值取自与引擎同源的色板。
+   变量挂在裸 [data-tone] 上,首页筛选 chip 与文章 .tag 共用同一套映射。
+   没带 tone 的(旧内容/未登记写法)退回站点强调色,不会掉样式。 */
+.tag {
+  color: var(--tag-ink, var(--accent-ink));
+  background: var(--tag-bg, var(--accent-soft));
+}
+[data-tone='teal'] {
+  --tag-ink: var(--tag-teal-ink);
+  --tag-bg: var(--tag-teal-bg);
+}
+[data-tone='amber'] {
+  --tag-ink: var(--tag-amber-ink);
+  --tag-bg: var(--tag-amber-bg);
+}
+[data-tone='indigo'] {
+  --tag-ink: var(--tag-indigo-ink);
+  --tag-bg: var(--tag-indigo-bg);
+}
+[data-tone='blue'] {
+  --tag-ink: var(--tag-blue-ink);
+  --tag-bg: var(--tag-blue-bg);
+}
+[data-tone='purple'] {
+  --tag-ink: var(--tag-purple-ink);
+  --tag-bg: var(--tag-purple-bg);
+}
+[data-tone='coral'] {
+  --tag-ink: var(--tag-coral-ink);
+  --tag-bg: var(--tag-coral-bg);
+}
 .post-meta .tag {
-  color: var(--accent-ink);
-  background: var(--accent-soft);
   border-radius: 999px;
   padding: 1px 9px;
   font-size: 0.78rem;
@@ -709,6 +816,95 @@ html[data-theme='dark'] .share-btn.primary:hover {
   margin-top: 0.9rem;
 }
 
+/* ---------- 文章所属系列导航 ---------- */
+.series-nav {
+  margin-top: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 1.05rem 1.25rem 1.1rem;
+}
+.series-nav-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+.series-nav-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.series-nav-name {
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+.series-nav-count {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.series-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.series-nav-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.34rem 0.55rem;
+  border-left: 2px solid transparent;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.94rem;
+}
+.series-nav-num {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.series-nav-title {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+a.series-nav-title:hover {
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+.series-nav-list li.is-current {
+  background: var(--bg-soft);
+  border-left-color: var(--accent);
+}
+.series-nav-list li.is-current .series-nav-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.series-nav-list li.is-current .series-nav-num {
+  color: var(--accent-ink);
+}
+
+/* ---------- 系列聚合页 ---------- */
+.series-eyebrow {
+  margin: 0 0 0.3rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  color: var(--accent-ink);
+}
+.series-idx {
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+}
+/* 系列页末尾的返回链接：借掉 .post-list 的下内边距，别留一大段空白 */
+.series-back {
+  margin: -2.4rem 0 3.2rem;
+  font-size: 0.9rem;
+}
+
 /* ---------- 文末上一篇 / 下一篇 ---------- */
 .post-nav {
   margin-top: 2.75rem;
@@ -846,6 +1042,9 @@ html[data-theme='dark'] .share-btn.primary:hover {
 .gv-scene-host {
   width: 100%;
   position: relative;
+  /* 建立层叠上下文：3D 图的 HTML overlay（图例/群信息/按钮，引擎侧带很高的内联
+     z-index）被关进本容器，滚动时不会压到 sticky 页眉（z-index 10）之上 */
+  isolation: isolate;
 }
 .gv-scene-empty {
   color: var(--text-dim);
@@ -974,6 +1173,14 @@ html[data-theme='dark'] .share-btn.primary:hover {
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* 窄屏不显示操作提示：它的文案（「悬停查看元素」「滚轮缩放」）在触屏上本就不成立，
+   而 nowrap + flex-shrink:0 会让它顶出视口（反馈单观察 5，390 视口实测右缘超 15px）。
+   说明栏剩下 符号·视图 + 图注，图注可缩略，不再溢出。 */
+@media (max-width: 640px) {
+  .gv-scene-hint {
+    display: none;
+  }
+}
 
 /* ---------- 页脚 ---------- */
 .site-footer {
@@ -1032,29 +1239,15 @@ html[data-theme='dark'] .share-btn.primary:hover {
   .cover-engine {
     margin-bottom: 1.8rem;
   }
-  /* 详情页头部横卡窄屏:纵排(封面上、文字下),封面下缘渐隐过渡到文字区 */
+  /* 详情页头部横卡窄屏:与首页同款横排,封面占比略增、左缘渐隐不变 */
   .head-card {
-    flex-direction: column-reverse;
+    min-height: 148px;
   }
   .head-card-text {
-    padding: 1.25rem 1.2rem 1.35rem;
+    padding: 0.95rem 0 0.95rem 1rem;
   }
   .head-card-cover {
-    flex: none;
-    min-height: 0;
-    height: 205px;
-    justify-content: stretch;
-  }
-  .head-card-cover .cover-engine-head {
-    height: 205px;
-    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-  }
-  .head-card-cover .cover-engine-head .gv-scene-host {
-    height: 100% !important;
-  }
-  .head-card-cover .head-img {
-    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+    flex-basis: 42%;
+    max-width: none;
   }
 }

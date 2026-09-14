@@ -1,0 +1,102 @@
+---
+/**
+ * 形状决策链示意 —— 纯静态 SVG（不是活图：这是逻辑结构，不是群论图形）。
+ * 分支顺序与引擎 getDefaultShape2D / getDefaultLayout3D 一致，2D/3D 合并成一格。
+ * 配色取主题变量，深浅色自动切换。
+ */
+---
+<figure class="shape-tree">
+  <svg
+    viewBox="0 0 720 360"
+    role="img"
+    aria-label="形状决策链：symbol 依次判断半直积、直积、族类，都不命中走兜底"
+  >
+    <defs>
+      <marker
+        id="st-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="6.5"
+        markerHeight="6.5"
+        orient="auto-start-reverse"
+      >
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--text-dim)"></path>
+      </marker>
+    </defs>
+
+    <!-- 起点 -->
+    <rect x="6" y="128" width="108" height="56" rx="11" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+    <text x="60" y="152" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text)">群的 symbol</text>
+    <text x="60" y="170" text-anchor="middle" font-size="11" fill="var(--text-dim)">C₇:C₃、S₄…</text>
+
+    <!-- 四条分支：判断(左) → 形状(右) -->
+    <!-- row1 -->
+    <polyline points="114,156 140,156 140,34 166,34" fill="none" stroke="var(--text-dim)" stroke-width="1.4"></polyline>
+    <rect x="166" y="11" width="230" height="46" rx="9" fill="var(--bg-soft)" stroke="var(--border)"></rect>
+    <text x="281" y="31" text-anchor="middle" font-size="12.5" fill="var(--text)">带冒号记号</text>
+    <text x="281" y="47" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">半直积</text>
+    <line x1="396" y1="34" x2="446" y2="34" stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#st-arrow)"></line>
+    <rect x="452" y="11" width="262" height="46" rx="9" fill="var(--card)" stroke="var(--border)"></rect>
+    <text x="583" y="31" text-anchor="middle" font-size="12" fill="var(--text)">2D 重布线 · 3D 圆柱</text>
+    <text x="583" y="47" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">陪集环 + φ 扭转</text>
+
+    <!-- row2 -->
+    <polyline points="114,156 140,156 140,118 166,118" fill="none" stroke="var(--text-dim)" stroke-width="1.4"></polyline>
+    <rect x="166" y="95" width="230" height="46" rx="9" fill="var(--bg-soft)" stroke="var(--border)"></rect>
+    <text x="281" y="115" text-anchor="middle" font-size="12.5" fill="var(--text)">带 ×</text>
+    <text x="281" y="131" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">直积</text>
+    <line x1="396" y1="118" x2="446" y2="118" stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#st-arrow)"></line>
+    <rect x="452" y="95" width="262" height="46" rx="9" fill="var(--card)" stroke="var(--border)"></rect>
+    <text x="583" y="115" text-anchor="middle" font-size="12" fill="var(--text)">数因子 → 按成色分</text>
+    <text x="583" y="131" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">格点 · 同心圆 · 甜甜圈 · 环上网格</text>
+
+    <!-- row3 -->
+    <polyline points="114,156 140,156 140,202 166,202" fill="none" stroke="var(--text-dim)" stroke-width="1.4"></polyline>
+    <rect x="166" y="179" width="230" height="46" rx="9" fill="var(--bg-soft)" stroke="var(--border)"></rect>
+    <text x="281" y="199" text-anchor="middle" font-size="12.5" fill="var(--text)">出身：Cₙ、Dₙ、Sₙ、Aₙ…</text>
+    <text x="281" y="215" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">族类</text>
+    <line x1="396" y1="202" x2="446" y2="202" stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#st-arrow)"></line>
+    <rect x="452" y="179" width="262" height="46" rx="9" fill="var(--card)" stroke="var(--border)"></rect>
+    <text x="583" y="199" text-anchor="middle" font-size="12" fill="var(--text)">按族给形状</text>
+    <text x="583" y="215" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">圆 · 双环 · 多面体投影 · 特展形状</text>
+
+    <!-- row4 -->
+    <polyline points="114,156 140,156 140,286 166,286" fill="none" stroke="var(--text-dim)" stroke-width="1.4"></polyline>
+    <rect x="166" y="263" width="230" height="46" rx="9" fill="var(--bg-soft)" stroke="var(--border)"></rect>
+    <text x="281" y="290" text-anchor="middle" font-size="12.5" fill="var(--text)">都没命中</text>
+    <line x1="396" y1="286" x2="446" y2="286" stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#st-arrow)"></line>
+    <rect x="452" y="263" width="262" height="46" rx="9" fill="var(--card)" stroke="var(--border)"></rect>
+    <text x="583" y="283" text-anchor="middle" font-size="12" fill="var(--text)">兜底</text>
+    <text x="583" y="299" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">圆 · 圆锥（3D 再退球面）</text>
+  </svg>
+  <figcaption>形状决策链：从 symbol 往下逐条判断，命中即返回，都不命中才走兜底。</figcaption>
+</figure>
+
+<style>
+  .shape-tree {
+    margin: 2rem 0;
+  }
+  .shape-tree svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .shape-tree figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  @media (max-width: 640px) {
+    /* 窄屏：保住 svg 的渲染宽度（不被压到 350px 导致字号不可读），容器可横向滑动 */
+    .shape-tree {
+      margin: 1.6rem 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .shape-tree svg {
+      min-width: 600px;
+    }
+  }
+</style>

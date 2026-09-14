@@ -574,6 +574,9 @@ export default function GroupScene({
               />
             )}
             {view === 'table' && <TableView group={group} {...sceneProps} cellSize={cellSize} />}
+            {/* 3D canvas 背景由引擎按 theme 决定（Cayley3DSceneProps.theme，
+                缺省回落 'dark'）。壳原先漏传这个 prop，导致浅色主题下 3D 凯莱图
+                仍是黑底，而 2D 视图走 sceneProps.theme 是对的——同一页两种主题。 */}
             {view === 'cayley3d' && (
               <Cayley3DScene
                 group={group}
@@ -582,6 +585,7 @@ export default function GroupScene({
                 showLabels={sceneShowLabels}
                 autoRotate={autoRotate}
                 locked={locked}
+                theme={bubbleTheme}
                 nodeScale={isWordLengthSphere ? undefined : (nodeScale ?? (isNarrow ? 0.7 : undefined))}
                 layout3D={layout3DProp}
                 actions={actionParams}

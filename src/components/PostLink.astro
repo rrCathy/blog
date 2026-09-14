@@ -1,0 +1,32 @@
+---
+/**
+ * PostLink — 正文内链：<PostLink slug="260910_cayley-graph" />
+ *
+ * 构建期做三件事：
+ *   1. slug 解析成该文 frontmatter 的 title 作链接文字——文章改名，正文自动跟随；
+ *   2. slug 不存在、或指向 draft: true 的文章 → build 直接报错，死链不上线
+ *      （draft 文章页面本身仍会部署，被正文引用等于漏稿，一并拦下）；
+ *   3. URL 用 import.meta.env.BASE_URL 拼接，改 base 配置不留坏链。
+ *
+ * 仅限 .mdx（组件语法），.md 手写相对链接时注意核对 slug。
+ */
+import { getCollection } from 'astro:content'
+
+interface Props {
+  slug: string
+}
+
+const { slug } = Astro.props
+const post = (await getCollection('blog')).find((p) => p.id === slug)
+
+if (!post) {
+  throw new Error(
+    `[PostLink] 找不到 slug 为 "${slug}" 的文章，这条内链是死链（核对 src/content/blog/ 的文件名）`,
+  )
+}
+if (post.data.draft) {
+  throw new Error(`[PostLink] "${slug}" 是草稿（draft: true），不能被正文引用`)
+}
+---
+
+<a class="post-link" href={import.meta.env.BASE_URL + slug + '/'}>{post.data.title}</a>

@@ -19,6 +19,8 @@ frontmatter 字段（schema 见 `src/content.config.ts`）：
 | `pubDate` | 是 | 发布日期 |
 | `updateDate` | 否 | 有实质修订时补上，页脚会显示「最后更新」 |
 | `tags` | 否 | 数组，展示侧自动聚合 |
+| `series` | 否 | 系列名（如 `凯莱图`）。同名文章构成一个系列，构建期自动聚合、按发布日期升序 |
+| `seriesSlug` | 否 | 系列页 URL 段（如 `cayley`，缺省用系列名）。**同系列每篇必须写同一个值**，不一致构建期直接报错 |
 | `draft` | 否 | `true` 则不进列表与 RSS |
 | `cover` | 否 | 封面/头图：首页横卡右侧 + 详情页头部横卡右侧，写法见下 |
 
@@ -44,7 +46,9 @@ cover:
   poster: covers/260912-s4.png  # 首页静态海报,没给则渐变兜底
 ```
 
-引擎封面用在哪，封面就长在哪：首页横卡与详情页头部横卡是**同一套版式**（文字左、封面右、封面左缘向卡底色渐隐），详情页的更大（标题字号更大、封面列 45% 宽、高约 330px）。没写 `cover` 的文章头部保持纯文字版式。
+引擎封面用在哪，封面就长在哪：首页横卡与详情页头部横卡是**同一套版式**（文字左、封面右、封面左缘向卡底色渐隐，区别仅是没有摘要），尺寸也对齐（`min-height` 176px、窄屏 148px，封面列 40%）。没写 `cover` 的文章头部保持纯文字版式。
+
+**系列（`series` + `seriesSlug`）**：把有先后顺序的几篇挂同一个系列名，构建期自动聚合（见 `src/lib/series.ts`）。两处产出——文章末尾的「系列导航」卡（列出全篇、当前篇高亮、点系列名进聚合页），以及聚合页 `/blog/series/<seriesSlug>/`。**同系列每篇都要写这两个字段**：`seriesSlug` 缺省会用系列名当 URL，同系列各篇不一致则构建期直接报错。系列内顺序按 `pubDate` 排，不需要额外字段；`draft: true` 的文章不进系列。
 
 引擎封面的固定语境（作者不可配，PostCover 统一强制）：深色主题、`locked`、`selectable:false`、`meta:false`、不常驻节点标签；详情页横卡外层 `pointer-events:none` 并隐藏 `|G|` 徽章等 overlay（`.gv-html-fullscreen`）。**海报生成流程**见项目技能 `.workbuddy/skills/blog-cover-poster/`：hero 是 client:only 活图，首页不能挂一堆 WebGL——海报用无头浏览器从渲染结果截图。赤道视角(phi≈76°)的 3D 图又扁又糊，单独在临时「摄影棚」页放同配置但**解锁、不自转**的图，playwright 鼠标拖拽抬高相机（拖下 = phi 减小）到 3/4 视角再截 `.gv-scene-host`。海报存 `public/covers/<slug>.png`，路径回填 frontmatter。
 

@@ -1,19 +1,20 @@
 ---
 /**
- * PostCover — 文章封面（首页横卡右侧 / 详情页 hero）
+ * PostCover — 文章封面（首页横卡右侧 / 详情页头部横卡）
  *
  * cover 三种形态（schema 见 src/content.config.ts）：
  *   - 'covers/x.png'        纯图片/动图
  *   - { img, alt? }         图片 + 说明文字
- *   - { engine, poster? }   引擎活图：详情页头部横卡右列渲染「锁定、不可交互、恒深色」的活图；
- *                           首页横卡用 poster 静态海报（无头浏览器从引擎真实渲染截图生成），
- *                           没给 poster 则渐变兜底
+ *   - { engine, poster? }   引擎封面：整站一律用**静态海报**（poster，无头浏览器从引擎真实
+ *                           渲染截图生成）。engine 配置只用于确定 poster 与 og:image，
+ *                           不再在页面里渲染活图——详情页头卡与首页横卡同为静图，页面更轻，
+ *                           也不再把窄屏裁剪问题带进封面。没给 poster 则渐变兜底。
  * 无 cover 时按 seed（post.id）生成确定性渐变占位——保证每篇都有头图。
  *
- * 封面语境统一约定：深色主题（封面是图，不随页面主题翻变）、读者不可交互
- * （locked + selectable=false + 外层 pointer-events:none）、不常驻节点标签、无说明栏。
+ * 封面语境统一约定：深色（海报本身深色）、左缘向卡底色渐隐、读者不可交互。
  */
-import GroupScene from './GroupScene.tsx'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { coverFallback } from '../lib/cover-fallback'
 
 interface EngineCover {
@@ -33,6 +34,7 @@ interface EngineCover {
   path?: string
   pathColor?: string
   pathWidth?: number
+  edgeCurvature?: number
 }
 
 interface CoverData {
@@ -44,8 +46,7 @@ interface CoverData {
 
 interface Props {
   cover?: string | CoverData | null
-  /** card = 首页横卡右列(静态图/兜底)；head = 详情页头部横卡右列(引擎活图/静态图)；
-   *  hero = 详情页独立大图(仅纯图片封面兜底用) */
+  /** card = 首页横卡右列；head = 详情页头部横卡右列；hero = 详情页独立大图（纯图片封面用） */
   variant: 'card' | 'hero' | 'head'
   /** 渐变兜底的取色种子（用 post.id，同一篇永远同色） */
   seed: string
@@ -57,26 +58,17 @@ const { cover, variant, seed, title } = Astro.props
 const data: CoverData | null =
   cover == null ? null : typeof cover === 'string' ? { img: cover } : cover
 
-// 首页横卡展示的静态图：图片封面用 img，引擎封面用 poster（没给则走渐变兜底）
+// 封面静态图：图片封面用 img，引擎封面用 poster（没给则走渐变兜底）
 const imgPath: string | null = data?.img ?? (data?.engine ? (data.poster ?? null) : null)
-const engine = data?.engine ?? null
+const hasEngine = data?.engine != null
 const src = imgPath ? import.meta.env.BASE_URL + imgPath.replace(/^\//, '') : null
+// 浅色主题海报:约定与深色同名的 '-light' 后缀文件,public 下存在才输出双图。
+// 浅色主题用浅色版(与浅色卡底同色系,封面渐隐/衔接不再拉灰带),深色主题用深色版。
+// og:image 仍取深色版(社交卡片深色更醒目),见 [...slug].astro。
+const lightPath = imgPath ? imgPath.replace(/\.png$/, '-light.png') : null
+const lightExists = lightPath ? existsSync(resolve(process.cwd(), 'public', lightPath)) : false
+const lightSrc = lightExists ? import.meta.env.BASE_URL + lightPath.replace(/^\//, '') : null
 const alt = data?.alt ?? `「${title}」封面图`
-
-// 引擎封面的固定语境：深色、锁定、不可选中、无说明栏、不常驻标签。
-// autoRotate 仅 3D 视图缺省开（封面让它"活"着），2D 静置。
-const engineProps = engine
-  ? {
-      ...engine,
-      height: engine.height ?? (variant === 'head' ? 330 : 420),
-      theme: 'dark' as const,
-      locked: true,
-      selectable: false,
-      meta: false,
-      showLabels: engine.showLabels ?? false,
-      autoRotate: engine.autoRotate ?? engine.view === 'cayley3d',
-    }
-  : null
 
 // 确定性渐变兜底（逻辑在 src/lib/cover-fallback.ts，分享图 canvas 共用同一配色）
 const { css: fallbackBg } = coverFallback(seed)
@@ -89,32 +81,61 @@ const isHead = variant === 'head'
   isCard ? (
     <div class="post-cover">
       {src ? (
-        <img src={src} alt={alt} loading="lazy" decoding="async" />
+        <>
+          {lightSrc && (
+            <img class="only-light" src={lightSrc} alt={alt} loading="lazy" decoding="async" />
+          )}
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            class={lightSrc ? 'only-dark' : undefined}
+          />
+        </>
       ) : (
         <div class="cover-fallback" style={`background:${fallbackBg}`} aria-hidden="true" />
       )}
     </div>
   ) : isHead ? (
-    engineProps ? (
-      <div class="cover-engine cover-engine-head" style={`height:${engineProps.height}px`} aria-label={alt} role="img">
-        <GroupScene client:only="react" {...engineProps} />
-      </div>
-    ) : src ? (
-      <img class="head-img" src={src} alt={alt} loading="lazy" decoding="async" />
+    src ? (
+      <>
+        {lightSrc && (
+          <img
+            class="head-img only-light"
+            src={lightSrc}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+          />
+        )}
+        <img
+          class={`head-img${lightSrc ? ' only-dark' : ''}`}
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+        />
+      </>
+    ) : hasEngine ? (
+      /* 引擎封面但没生成海报：渐变兜底占位（与首页同色） */
+      <div class="head-img cover-fallback" style={`background:${fallbackBg}`} aria-hidden="true" />
     ) : null
-  ) : engineProps ? (
-    <div
-      class="cover-engine"
-      style={`min-height:${engineProps.height}px`}
-      aria-label={alt}
-      role="img"
-    >
-      <GroupScene client:only="react" {...engineProps} />
-    </div>
   ) : (
     <div class="cover-hero">
       {src ? (
-        <img src={src} alt={alt} loading="lazy" decoding="async" />
+        <>
+          {lightSrc && (
+            <img class="only-light" src={lightSrc} alt={alt} loading="lazy" decoding="async" />
+          )}
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            class={lightSrc ? 'only-dark' : undefined}
+          />
+        </>
       ) : (
         <div class="cover-fallback" style={`background:${fallbackBg}`} aria-hidden="true" />
       )}
