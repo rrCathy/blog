@@ -255,6 +255,7 @@ export default function ShareBar(props: ShareBarProps) {
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [canShare, setCanShare] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const blobRef = useRef<Blob | null>(null)
   const objUrlRef = useRef<string | null>(null)
 
@@ -280,13 +281,42 @@ export default function ShareBar(props: ShareBarProps) {
 
   const shareText = [props.title, props.description ?? '', props.url].filter(Boolean).join('\n')
 
+  /**
+   * 复制到剪贴板，两条路都试，都不行就摊开让人手动选。
+   *
+   * 先走 execCommand：移动端浏览器（尤其微信/QQ 内置 WebView）对
+   * navigator.clipboard 限制很多，而这条老路在同步的用户手势里最稳。
+   * 失败再退回标准 API。两边都失败时**不能静默**——原来的实现吞掉异常，
+   * 读者看到的就是「点了没反应」，所以这里改成弹出可长按选中的文案。
+   */
   async function copyText() {
+    let ok = false
     try {
-      await navigator.clipboard.writeText(shareText)
+      const ta = document.createElement('textarea')
+      ta.value = shareText
+      ta.style.cssText = 'position:fixed;top:0;left:-9999px;font-size:16px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      ta.setSelectionRange(0, shareText.length)
+      ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+    } catch {
+      ok = false
+    }
+    if (!ok && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareText)
+        ok = true
+      } catch {
+        ok = false
+      }
+    }
+    if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* 剪贴板不可用（非安全上下文等），静默 */
+    } else {
+      setManualOpen(true)
     }
   }
 
@@ -375,6 +405,42 @@ export default function ShareBar(props: ShareBarProps) {
               )}
               <button type="button" className="share-btn" onClick={copyText}>
                 {copied ? '已复制 ✓' : '复制分享文字'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {manualOpen && (
+        <div className="share-overlay" onClick={() => setManualOpen(false)}>
+          <div
+            className="share-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="手动复制分享文字"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="share-modal-head">
+              <span>自动复制没成功，长按下面的文字选中复制</span>
+              <button
+                type="button"
+                className="share-modal-close"
+                onClick={() => setManualOpen(false)}
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              className="share-manual-text"
+              readOnly
+              rows={4}
+              value={shareText}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <div className="share-actions">
+              <button type="button" className="share-btn primary" onClick={() => setManualOpen(false)}>
+                知道了
               </button>
             </div>
           </div>

@@ -6,6 +6,13 @@
  * ============================================================ */
 
 :root {
+  /* 站点自带深/浅两套主题(由 html[data-theme] 切换),这里显式声明 color-scheme:
+     ① 让浏览器原生控件(滚动条、表单)跟随当前主题;
+     ② 关掉 Chrome Android 的「自动深色主题」。它不看站点有没有自己的深色主题,
+        只按自己的启发式重新上色——实测会把内联 SVG 的格子填色反成浅色、却不反
+        SVG 里的文字,深色下杨表的数字就成了浅字浅底,看不清。
+        https://developer.chrome.com/blog/auto-dark-theme */
+  color-scheme: only light;
   --bg: #fdfdfc;
   --bg-soft: #f4f4f1;
   --card: #ffffff;
@@ -43,6 +50,8 @@
 
 /* 深色主题:变量覆盖由 html[data-theme] 驱动 */
 html[data-theme='dark'] {
+  /* 页面已是深色,声明 dark 后浏览器不再套用自动深色主题(也修好原生控件配色) */
+  color-scheme: dark;
   --bg: #0d1117;
   --bg-soft: #151b23;
   --card: #10161d;
@@ -808,6 +817,21 @@ html[data-theme='dark'] .share-btn.primary:hover {
   height: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+/* 自动复制失败时的手动兜底：可长按选中的文案 */
+.share-manual-text {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  resize: vertical;
 }
 .share-actions {
   display: flex;
