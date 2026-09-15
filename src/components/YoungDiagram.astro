@@ -18,9 +18,21 @@ interface Props {
   hooks?: boolean
   transpose?: boolean
   caption?: string
+  /** 紧凑模式：去掉外边距与图注，供并排的图集使用 */
+  compact?: boolean
+  /** 填数（画标准杨表）：二维数组，第 i 行第 j 个格子填什么；缺省不填 */
+  fill?: number[][]
 }
 
-const { shape, size = 36, hooks = false, transpose = false, caption } = Astro.props
+const {
+  shape,
+  size = 36,
+  hooks = false,
+  transpose = false,
+  caption,
+  compact = false,
+  fill,
+} = Astro.props
 
 const rows = shape.length
 const cols = Math.max(...shape)
@@ -52,7 +64,7 @@ const aria = transpose
     : `杨图 ${label(shape)}`
 ---
 
-<figure class="young" style={`--yd-max:${TOTAL_W}px`}>
+<figure class={'young' + (compact ? ' is-compact' : '')} style={`--yd-max:${TOTAL_W}px`}>
   <svg viewBox={`0 0 ${TOTAL_W} ${transpose ? Math.max(H1, H2) : H1}`} role="img" aria-label={aria}>
     <defs>
       <marker
@@ -80,7 +92,7 @@ const aria = transpose
                 width={size}
                 height={size}
                 fill="var(--bg-soft)"
-                stroke="var(--border)"
+                stroke="var(--text-dim)" stroke-opacity="0.55"
                 stroke-width="1"
               />
               {hooks && (
@@ -93,6 +105,18 @@ const aria = transpose
                   fill="var(--text)"
                 >
                   {hook(i, j)}
+                </text>
+              )}
+              {!hooks && fill?.[i]?.[j] != null && (
+                <text
+                  x={c.x + size / 2}
+                  y={c.y + size / 2}
+                  text-anchor="middle"
+                  dominant-baseline="central"
+                  font-size={Math.round(size * 0.42)}
+                  fill="var(--text)"
+                >
+                  {fill[i][j]}
                 </text>
               )}
             </>
@@ -132,7 +156,7 @@ const aria = transpose
                   width={size}
                   height={size}
                   fill="var(--bg-soft)"
-                  stroke="var(--border)"
+                  stroke="var(--text-dim)" stroke-opacity="0.55"
                   stroke-width="1"
                 />
               )
@@ -143,19 +167,23 @@ const aria = transpose
     }
   </svg>
   {
-    caption ? (
-      <figcaption set:html={caption} />
-    ) : (
-      <figcaption>
-        {transpose ? `λ = ${label(shape)} 与它的转置 λ′ = ${label(conj)}` : `λ = ${label(shape)}`}
-      </figcaption>
-    )
+    !compact &&
+      (caption ? (
+        <figcaption set:html={caption} />
+      ) : (
+        <figcaption>
+          {transpose ? `λ = ${label(shape)} 与它的转置 λ′ = ${label(conj)}` : `λ = ${label(shape)}`}
+        </figcaption>
+      ))
   }
 </figure>
 
 <style>
   .young {
     margin: 1.6rem 0;
+  }
+  .young.is-compact {
+    margin: 0;
   }
   .young svg {
     width: 100%;
