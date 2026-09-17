@@ -1,0 +1,330 @@
+---
+/**
+ * 箱子与卡片 —— 把一个映射画成有向图，纯静态 SVG。
+ *
+ * 引擎画的是群，画不了「箱子 i 里放着卡片 j」这种映射图（凯莱图的边语义是
+ * 生成元作用，不是位置映射），所以这篇手绘。配色约定同 YoungDiagram /
+ * RoundRobinGraph：结构色走主题变量，环的身份色是固定调色板。
+ *
+ * perm    逗号分隔的目标序列，1-indexed：第 i 个数 = i 号箱子里的卡片编号。
+ *         长度即 n。允许出现重号（此时不再是置换，会画出环 + 尾巴）。
+ * layout  'ring'   圆形布局：n 个节点均分圆周，弧线从箱子指向卡片
+ *         'chains' 链条布局：每个环横排成一行，末端回绕到行首
+ * start   高亮从这号（1-indexed）出发的链条，其余边淡出；缺省不高亮
+ * steps   只走这几步；缺省走完所在的整个环
+ * size    svg 最大宽度 px，缺省 420
+ * caption 图下说明（支持内联 HTML）
+ * compact 紧凑模式：去外边距与图注，供并排图集
+ */
+interface Props {
+  perm: string
+  layout?: 'ring' | 'chains'
+  start?: number
+  steps?: number
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { perm, layout = 'ring', start, steps, size = 420, caption, compact = false } = Astro.props
+
+const target = perm
+  .split(',')
+  .map((s) => Number(s.trim()))
+  .filter((x) => Number.isFinite(x))
+  .map((x) => x - 1)
+const n = target.length
+
+/** 环分解：置换只剩环；允许重号时，path 前面那段是挂上去的尾巴 */
+const cycles: number[][] = []
+const cycleOf = new Map<number, number>()
+{
+  const seen = new Set<number>()
+  for (let i = 0; i < n; i++) {
+    if (seen.has(i)) continue
+    const path: number[] = []
+    const at = new Map<number, number>()
+    let j = i
+    while (j >= 0 && j < n && !at.has(j)) {
+      at.set(j, path.length)
+      path.push(j)
+      j = target[j]
+    }
+    const closed = j >= 0 && j < n && at.has(j)
+    for (const v of path) seen.add(v)
+    if (closed) {
+      const cyc = path.slice(at.get(j)!)
+      const idx = cycles.length
+      for (const v of cyc) cycleOf.set(v, idx)
+      cycles.push(cyc)
+    }
+  }
+}
+
+/** 环身份色（固定调色板，与深浅主题无关） */
+const PALETTE = ['#0e9488', '#d97706', '#4f46e5', '#dc2626', '#7c3aed', '#0891b2', '#65a30d', '#db2777']
+const ARROW = 'pc-arrow-'
+const ringColor = (i: number): string | null => {
+  const c = cycleOf.get(i)
+  return c == null ? null : PALETTE[c % PALETTE.length]
+}
+const ringMarker = (i: number): string => {
+  const c = cycleOf.get(i)
+  return c == null ? `${ARROW}gray` : `${ARROW}${c % PALETTE.length}`
+}
+
+/** 高亮：从 start 出发顺着映射走，记下走过的边与节点 */
+const litEdges = new Set<string>()
+const litNodes = new Set<number>()
+if (start != null) {
+  let cur = start - 1
+  const inCycle = cycleOf.has(cur)
+  const limit = steps ?? (inCycle ? cycles[cycleOf.get(cur)!].length : n)
+  for (let s = 0; s < limit; s++) {
+    if (cur < 0 || cur >= n) break
+    litNodes.add(cur)
+    litEdges.add(`${cur}>${target[cur]}`)
+    cur = target[cur]
+  }
+}
+const edgeLit = (i: number) => start == null || litEdges.has(`${i}>${target[i]}`)
+const nodeLit = (i: number) => start == null || litNodes.has(i)
+
+const NODE_R = 15
+
+/* ---------------- ring ---------------- */
+const C = 200
+const RING_R = 146
+const pos = (i: number) => {
+  const a = -Math.PI / 2 + (2 * Math.PI * i) / n
+  return { x: C + RING_R * Math.cos(a), y: C + RING_R * Math.sin(a) }
+}
+
+/** 节点 i 的极角（0 在正上方，顺时针为正） */
+const ang = (i: number) => -Math.PI / 2 + (2 * Math.PI * i) / n
+
+/** 边 i -> target[i] 的路径；自环画成朝外的鼓包 */
+const ringPath = (i: number): string => {
+  const to = target[i]
+  const p1 = pos(i)
+  if (to === i) {
+    const dx = p1.x - C, dy = p1.y - C
+    const L = Math.hypot(dx, dy) || 1
+    const ux = dx / L, uy = dy / L
+    const sx = p1.x + ux * NODE_R, sy = p1.y + uy * NODE_R
+    const ex = p1.x + ux * (NODE_R + 1) - uy * 14, ey = p1.y + uy * (NODE_R + 1) + ux * 14
+    const c1 = { x: p1.x + ux * 54 - uy * 32, y: p1.y + uy * 54 + ux * 32 }
+    const c2 = { x: p1.x + ux * 54 + uy * 32, y: p1.y + uy * 54 - ux * 32 }
+    return `M ${sx} ${sy} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${ex} ${ey}`
+  }
+  const p2 = pos(to)
+  const dx = p2.x - p1.x, dy = p2.y - p1.y
+  const L = Math.hypot(dx, dy) || 1
+  const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2
+  // 控制点朝圆心收缩，免得所有弦挤成一团
+  const bx = C + (mx - C) * 0.72
+  const by = C + (my - C) * 0.72
+  // 再沿弦的法线偏移一点：i->j 与 j->i 因此分居两侧，不会叠成一条线
+  let turn = ang(to) - ang(i)
+  while (turn <= -Math.PI) turn += 2 * Math.PI
+  while (turn > Math.PI) turn -= 2 * Math.PI
+  const off = Math.min(32, L * 0.24) * (turn > 0 ? 1 : -1)
+  const cx = bx + (-dy / L) * off
+  const cy = by + (dx / L) * off
+  const sx = p1.x + (dx / L) * NODE_R, sy = p1.y + (dy / L) * NODE_R
+  const ex = p2.x - (dx / L) * (NODE_R + 3), ey = p2.y - (dy / L) * (NODE_R + 3)
+  return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`
+}
+
+/* ---------------- chains ---------------- */
+const GAP_X = 74
+const ROW_H = 104
+const rowY = (row: number) => row * ROW_H + ROW_H * 0.64
+const chainPos = (row: number, k: number) => ({ x: 36 + k * GAP_X, y: rowY(row) })
+const chainColor = (row: number) => PALETTE[row % PALETTE.length]
+
+/** 环内第 k 条边；最后一条回绕到行首 */
+const chainPath = (row: number, k: number, len: number): string => {
+  const p1 = chainPos(row, k)
+  if (len === 1) {
+    const c1 = { x: p1.x + 30, y: p1.y - 52 }
+    const c2 = { x: p1.x - 30, y: p1.y - 52 }
+    const sx = p1.x + NODE_R * 0.7, sy = p1.y - NODE_R * 0.7
+    const ex = p1.x - NODE_R * 0.7, ey = p1.y - NODE_R * 0.7
+    return `M ${sx} ${sy} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${ex} ${ey}`
+  }
+  if (k === len - 1) {
+    const p2 = chainPos(row, 0)
+    const top = rowY(row) - 66
+    const sx = p1.x + 1, sy = p1.y - NODE_R
+    const ex = p2.x - NODE_R - 1, ey = p2.y - 4
+    return `M ${sx} ${sy} C ${p1.x + 46} ${top} ${p2.x - 50} ${top} ${ex} ${ey}`
+  }
+  const p2 = chainPos(row, k + 1)
+  return `M ${p1.x + NODE_R} ${p1.y} L ${p2.x - NODE_R - 3} ${p2.y}`
+}
+
+const maxLen = cycles.length ? Math.max(...cycles.map((c) => c.length)) : 1
+const VB_W = layout === 'chains' ? 36 + (maxLen - 1) * GAP_X + 64 : 2 * C
+const VB_H = layout === 'chains' ? cycles.length * ROW_H + 14 : 2 * C
+
+/** 有没有节点不在任何环上（允许重号时会出现尾巴） */
+const onCycle = new Set<number>()
+for (const c of cycles) for (const v of c) onCycle.add(v)
+const hasStray = onCycle.size < n
+
+const aria =
+  layout === 'chains'
+    ? `${n} 个箱子的映射按 ${cycles.length} 个环分行展开`
+    : `${n} 个箱子的映射，箭头从每个箱子指向它里面的卡片`
+---
+
+<figure class={'pc' + (compact ? ' is-compact' : '')} style={`--pc-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    <defs>
+      {
+        PALETTE.map((c, k) => (
+          <marker id={`${ARROW}${k}`} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill={c} />
+          </marker>
+        ))
+      }
+      <marker id={`${ARROW}gray`} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--text-soft)" />
+      </marker>
+    </defs>
+
+    {
+      layout === 'chains'
+        ? cycles.map((cyc, row) => (
+            <g opacity={start != null && !cyc.some((v) => edgeLit(v)) ? 0.25 : 1}>
+              <path
+                d={chainPath(row, cyc.length - 1, cyc.length)}
+                fill="none"
+                stroke={chainColor(row)}
+                stroke-width="2.1"
+                stroke-linecap="round"
+                marker-end={`url(#${ARROW}${row % PALETTE.length})`}
+              />
+              {cyc.slice(0, -1).map((_, k) => (
+                <path
+                  d={chainPath(row, k, cyc.length)}
+                  fill="none"
+                  stroke={chainColor(row)}
+                  stroke-width={start != null && edgeLit(cyc[k]) ? 3.6 : 2.1}
+                  stroke-linecap="round"
+                  marker-end={`url(#${ARROW}${row % PALETTE.length})`}
+                />
+              ))}
+              {cyc.map((v, k) => {
+                const p = chainPos(row, k)
+                const dim = start != null && !nodeLit(v)
+                return (
+                  <g opacity={dim ? 0.35 : 1}>
+                    <circle cx={p.x} cy={p.y} r={NODE_R} fill="var(--bg-soft)" stroke={chainColor(row)} stroke-width="1.8" />
+                    <text x={p.x} y={p.y} text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--text)">
+                      {v + 1}
+                    </text>
+                  </g>
+                )
+              })}
+            </g>
+          ))
+        : (
+            <>
+              {Array.from({ length: n }, (_, i) => {
+                const dim = start != null && !edgeLit(i)
+                return (
+                  <path
+                    d={ringPath(i)}
+                    fill="none"
+                    stroke={ringColor(i) ?? 'var(--text-soft)'}
+                    stroke-width={start != null && edgeLit(i) ? 3.6 : dim ? 1.5 : 2.1}
+                    stroke-opacity={dim ? 0.3 : 0.95}
+                    stroke-linecap="round"
+                    marker-end={`url(#${ringMarker(i)})`}
+                  />
+                )
+              })}
+              {Array.from({ length: n }, (_, i) => {
+                const p = pos(i)
+                const dim = start != null && !nodeLit(i)
+                return (
+                  <g opacity={dim ? 0.3 : 1}>
+                    <circle cx={p.x} cy={p.y} r={NODE_R} fill="var(--bg-soft)" stroke={ringColor(i) ?? 'var(--text-dim)'} stroke-width="1.8" />
+                    <text x={p.x} y={p.y} text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--text)">
+                      {i + 1}
+                    </text>
+                  </g>
+                )
+              })}
+            </>
+          )
+    }
+  </svg>
+  {
+    !compact && (
+      <div class="pc-legend">
+        {cycles.map((cyc, row) => (
+          <span class="pc-key">
+            <i style={`background:${PALETTE[row % PALETTE.length]}`} />
+            环 {row + 1} · 长 {cyc.length}
+          </span>
+        ))}
+        {hasStray && (
+          <span class="pc-key">
+            <i style="background:var(--text-soft)" />
+            不在环上
+          </span>
+        )}
+        {start != null && <span class="pc-note">粗线是从 {start} 号出发走过的路</span>}
+      </div>
+    )
+  }
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .pc {
+    margin: 1.6rem 0;
+  }
+  .pc.is-compact {
+    margin: 0;
+  }
+  .pc svg {
+    width: 100%;
+    max-width: var(--pc-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .pc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem 1.1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+  }
+  .pc-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .pc-key i {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .pc-note {
+    color: var(--text-dim);
+  }
+  .pc figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
