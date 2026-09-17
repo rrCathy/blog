@@ -1,0 +1,223 @@
+---
+/**
+ * 循环赛日程图 —— K_n 的边按轮次着色，纯静态 SVG。
+ * 引擎画的是群，画不了 K_n 的边分解（比如「6 个人的 15 场比赛按 5 轮染色」），
+ * 所以这篇手绘。配色约定同 YoungDiagram：结构色走主题变量，轮次色是固定的
+ * 中饱和度调色板（表达「第几轮」，与深浅主题无关，两边都可读）。
+ *
+ * scheme  'circle' 循环法：顶点 = ∞（圆心）+ 0..n-2（圆周），边 ∞-r 属第 r 轮，
+ *         边 i-j 属第 (i+j)/2 mod (n-1) 轮（n-1 奇，2 可逆）
+ *         'xor'   F_2^k 构造：顶点 0..n-1，边 x-y 属第 x^y 轮（n 必须是 2 的幂）
+ *         'custom' 任意表：边-轮映射由 edgesJson 给出（[[a,b,r],...]，顶点 0..n-1 圆周布局）
+ * layout  'circle' 圆桌布局 | 'cube' 立方体投影（仅 xor n=8：7 轮 = 3 组棱 + 3 组面对角线 + 1 组体对角线）
+ * rounds  只高亮这些轮（其余淡出成边框色）；缺省全彩
+ * size    svg 最大宽度 px，缺省 460
+ * caption 图下说明
+ * compact 紧凑模式：去外边距与图注，供并排图集
+ */
+interface Props {
+  n: number
+  scheme?: 'circle' | 'xor' | 'custom'
+  layout?: 'circle' | 'cube'
+  rounds?: number[]
+  /** scheme='custom' 时的边表：JSON 数组 [[a,b,r],...]，a<b，r 为轮次 */
+  edgesJson?: string
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { n, scheme = 'circle', layout = 'circle', rounds, edgesJson, size = 460, caption, compact = false } = Astro.props
+
+/** 轮次调色板（够 10 轮） */
+const PALETTE = ['#0e9488', '#d97706', '#4f46e5', '#dc2626', '#7c3aed', '#0891b2', '#65a30d', '#db2777', '#ea580c', '#2563eb']
+
+type V = { id: string; x: number; y: number }
+const verts: V[] = []
+let VB_W: number, VB_H: number
+
+if (layout === 'cube') {
+  // xor n=8：v = x + 2y + 4z。前景 z=0，背景 z=1 向右上偏 (dx, -dy)
+  const W = 236, pad = 48, dx = 76, dy = 76
+  VB_W = 2 * pad + W + dx
+  VB_H = 2 * pad + W + dy
+  for (let v = 0; v < 8; v++) {
+    const x = v & 1, y = (v >> 1) & 1, z = (v >> 2) & 1
+    verts.push({ id: String(v), x: pad + x * W + z * dx, y: pad + (1 - y) * W + (1 - z) * dy })
+  }
+} else if (scheme === 'circle') {
+  // 圆桌：∞ 在圆心，其余 0..n-2 均分圆周，0 在正上方、顺时针
+  const C = 200, R = 158
+  VB_W = VB_H = 2 * C
+  verts.push({ id: '∞', x: C, y: C })
+  for (let i = 0; i < n - 1; i++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / (n - 1)
+    verts.push({ id: String(i), x: C + R * Math.cos(a), y: C + R * Math.sin(a) })
+  }
+} else {
+  // xor 的圆周布局：0..n-1 均分圆周
+  const C = 200, R = 158
+  VB_W = VB_H = 2 * C
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n
+    verts.push({ id: String(i), x: C + R * Math.cos(a), y: C + R * Math.sin(a) })
+  }
+}
+
+const num = (v: V): number | null => (v.id === '∞' ? null : Number(v.id))
+/** 2 在模 m（奇数）下的逆元 */
+const inv2 = (m: number) => ((m + 1) / 2) % m
+
+const customMap: Map<string, number> | null =
+  scheme === 'custom' && edgesJson
+    ? new Map(JSON.parse(edgesJson).map(([a, b, r]: [number, number, number]) => [a < b ? `${a}-${b}` : `${b}-${a}`, r]))
+    : null
+
+const roundOf = (a: V, b: V): number => {
+  if (customMap) {
+    const ka = num(a)!, kb = num(b)!
+    return customMap.get(ka < kb ? `${ka}-${kb}` : `${kb}-${ka}`) ?? 0
+  }
+  if (scheme === 'xor') return num(a)! ^ num(b)!
+  const na = num(a), nb = num(b)
+  if (na === null) return nb!
+  if (nb === null) return na!
+  const m = n - 1
+  return (((na + nb) * inv2(m)) % m + m) % m
+}
+
+const edges: { a: V; b: V; r: number }[] = []
+for (let i = 0; i < verts.length; i++)
+  for (let j = i + 1; j < verts.length; j++)
+    edges.push({ a: verts[i], b: verts[j], r: roundOf(verts[i], verts[j]) })
+
+const showAll = !rounds || rounds.length === 0
+const isShown = (r: number) => showAll || rounds!.includes(r)
+
+/** cube 布局下按边类型分线宽与透明度：棱最突出，面对角线次之，体对角线最淡 */
+const widthOf = (r: number) => {
+  if (layout !== 'cube') return 2.4
+  const bits = (r & 1) + ((r >> 1) & 1) + ((r >> 2) & 1)
+  return bits === 1 ? 3.6 : bits === 2 ? 2.1 : 1.7
+}
+const opacityOf = (r: number) => {
+  if (layout !== 'cube') return 0.92
+  const bits = (r & 1) + ((r >> 1) & 1) + ((r >> 2) & 1)
+  return bits === 1 ? 0.95 : bits === 2 ? 0.68 : 0.55
+}
+
+/** 顶点标签外推方向 */
+const labelPos = (v: V) => {
+  if (v.id === '∞') return { x: v.x + 15, y: v.y + 15 }
+  const cx = VB_W / 2, cy = VB_H / 2
+  const dx = v.x - cx, dy = v.y - cy
+  const len = Math.hypot(dx, dy) || 1
+  return { x: v.x + (dx / len) * 17, y: v.y + (dy / len) * 17 }
+}
+
+const dimEdges = edges.filter((e) => !isShown(e.r))
+const litEdges = edges.filter((e) => isShown(e.r))
+const legendRounds = showAll ? Array.from({ length: n - 1 }, (_, i) => i) : rounds!.slice().sort((a, b) => a - b)
+const aria = `${n} 个选手的赛程表：完全图的 ${((n * (n - 1)) / 2)} 条边按 ${n - 1} 轮着色`
+---
+
+<figure class={'rr' + (compact ? ' is-compact' : '')} style={`--rr-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    {
+      dimEdges.map((e) => (
+        <line x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="var(--border)" stroke-width={widthOf(e.r)} stroke-linecap="round" />
+      ))
+    }
+    {
+      litEdges.map((e) => (
+        <line
+          x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
+          stroke={PALETTE[e.r % PALETTE.length]}
+          stroke-width={widthOf(e.r)}
+          stroke-linecap="round"
+          stroke-opacity={opacityOf(e.r)}
+        />
+      ))
+    }
+    {
+      verts.map((v) => {
+        const big = v.id === '∞'
+        return (
+          <>
+            <circle cx={v.x} cy={v.y} r={big ? 7 : 5.4} fill={big ? 'var(--accent-ink)' : 'var(--text-soft)'} />
+            <text
+              x={labelPos(v).x}
+              y={labelPos(v).y}
+              text-anchor="middle"
+              dominant-baseline="central"
+              font-size={big ? 15 : 13}
+              font-weight={big ? 600 : 400}
+              fill="var(--text-soft)"
+            >
+              {v.id}
+            </text>
+          </>
+        )
+      })
+    }
+  </svg>
+  {
+    !compact && (
+      <div class="rr-legend">
+        {legendRounds.map((r) => (
+          <span class="rr-key">
+            <i style={`background:${PALETTE[r % PALETTE.length]}`} />
+            轮 {r}
+          </span>
+        ))}
+        {!showAll && <span class="rr-note">其余边未上场</span>}
+      </div>
+    )
+  }
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .rr {
+    margin: 1.6rem 0;
+  }
+  .rr.is-compact {
+    margin: 0;
+  }
+  .rr svg {
+    width: 100%;
+    max-width: var(--rr-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .rr-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem 1.1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+  }
+  .rr-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .rr-key i {
+    width: 14px;
+    height: 3.5px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .rr-note {
+    color: var(--text-dim);
+  }
+  .rr figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
