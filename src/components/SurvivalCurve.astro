@@ -54,7 +54,7 @@ const chainPts = Array.from({ length: 50 }, (_, k) => {
 const p100 = surv(100)
 const p4 = surv(4)
 const random100 = Math.pow(0.5, 100)
-const aria = `成功率对比：随机抽是 (1/2)^n，跟着链条走是 1-(H_n-H_{n/2})，n=100 时前者约 10 的负 30 次方，后者 31.2%`
+const aria = `成功率对比：随机抽是 (1/2)^n，跟着链条走是 1-(H_n-H_{n/2})，n=100 时前者约 10 的负 30 次方，后者 31.18%`
 ---
 
 <figure class={'sc' + (compact ? ' is-compact' : '')} style={`--sc-max:${size}px`}>
@@ -100,7 +100,7 @@ const aria = `成功率对比：随机抽是 (1/2)^n，跟着链条走是 1-(H_n
 
     <circle cx={x(100)} cy={y(p100)} r="4.5" fill={TEAL} />
     <text x={x(100) - 8} y={y(p100) - 12} text-anchor="end" font-size="12.5" font-weight="600" fill={TEAL}>
-      31.2%
+      31.18%
     </text>
 
     <circle cx={x(100)} cy={y(random100)} r="4.5" fill={RED} />
