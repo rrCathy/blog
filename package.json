@@ -6,7 +6,7 @@
   "description": "rrCathy's blog — Astro + React + MDX, deployed to rrcathy.github.io/blog",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/fill-rss.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
@@ -14,11 +14,13 @@
     "@astrojs/mdx": "^5.0.4",
     "@astrojs/react": "^5.0.7",
     "@astrojs/rss": "^4.0.19",
+    "@astrojs/sitemap": "^3.7.4",
     "@groupviz/core": "^2.3.0",
     "@groupviz/react": "^2.3.0",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "astro": "^6.4.8",
+    "fuse.js": "^7.5.0",
     "katex": "~0.16.45",
     "qrcode-generator": "^2.0.4",
     "react": "~19.2.8",

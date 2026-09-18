@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { getAllTags } from '../../lib/tags'
+import { tagTone } from '../../lib/tag-tone'
+
+const groups = await getAllTags()
+const base = import.meta.env.BASE_URL
+const totalPosts = groups.reduce((acc, g) => acc + g.tag.count, 0)
+---
+<BaseLayout
+  title="rrCathy 的博客"
+  pageTitle="标签 · Tags"
+  description={`按标签浏览全部 ${totalPosts} 篇次的文章分布。`}
+>
+  <div class="wrap">
+    <section class="blog-hero">
+      <p class="series-eyebrow">索引</p>
+      <h1>标签</h1>
+      <p class="sub">共 {groups.length} 个标签 · 文章被引用 {totalPosts} 次</p>
+    </section>
+
+    {groups.length === 0 ? (
+      <p class="post-empty">还没有任何标签。</p>
+    ) : (
+      <ul class="tag-cloud">
+        {groups.map((g) => (
+          <li>
+            <a
+              class="tag-cloud-chip"
+              data-tone={tagTone(g.tag.name)}
+              href={base + 'tags/' + g.tag.slug + '/'}
+            >
+              <span class="tag-cloud-name">#{g.tag.name}</span>
+              <span class="tag-cloud-count">{g.tag.count}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <p class="series-back"><a href={base}>← 全部文章</a></p>
+  </div>
+</BaseLayout>

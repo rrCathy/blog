@@ -65,6 +65,10 @@ const shareImgUrl =
   pageTitle={post.data.title}
   description={post.data.description}
   image={coverOgUrl}
+  isArticle={true}
+  publishedTime={post.data.pubDate.toISOString()}
+  modifiedTime={(post.data.updateDate ?? post.data.pubDate).toISOString()}
+  tags={post.data.tags}
 >
   <article class="wrap article">
     {post.data.cover ? (

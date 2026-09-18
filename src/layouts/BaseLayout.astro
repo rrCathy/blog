@@ -2,6 +2,7 @@
 import '../styles/global.css'
 import 'katex/dist/katex.min.css'
 import '@groupviz/react/theme.css'
+import SearchBox from '../components/SearchBox.tsx'
 
 interface Props {
   title: string
@@ -9,15 +10,42 @@ interface Props {
   pageTitle?: string
   /** 社交分享图(og:image)；传 base 下的相对路径(如 '/blog/covers/x.png') */
   image?: string
+  /**
+   * 当前页是否文章详情——影响 og:type / article:* meta 与 JSON-LD 注入。
+   * 详情页传 true，其他页（首页/标签/归档）传 false 或不传。
+   */
+  isArticle?: boolean
+  /**
+   * 文章详情专用：发布日期 ISO 字符串（og:article:published_time / JSON-LD datePublished）
+   */
+  publishedTime?: string
+  /** 文章详情专用：最后更新 ISO 字符串 */
+  modifiedTime?: string
+  /** 文章详情专用：标签列表（输出 article:tag meta，搜索引擎理解文章主题用） */
+  tags?: string[]
+  /** 文章详情专用：作者/发布者名（JSON-LD author） */
+  authorName?: string
 }
 
-const { title, description = '数学笔记 · 技术记录', pageTitle, image } = Astro.props
+const {
+  title,
+  description = '数学笔记 · 技术记录',
+  pageTitle,
+  image,
+  isArticle = false,
+  publishedTime,
+  modifiedTime,
+  tags,
+  authorName = 'rrCathy',
+} = Astro.props
 const fullTitle = pageTitle ? `${pageTitle} · ${title}` : title
 const url = Astro.url
 // base 前缀(如 /blog/)，结尾带 '/'
 const base = import.meta.env.BASE_URL
 // og:image 转绝对地址(分享卡片要求绝对 URL)
 const ogImage = image ? new URL(image, Astro.site).toString() : undefined
+// canonical：所有页面都用绝对 URL，AI/搜索引擎去重就靠这个
+const canonical = new URL(url.pathname.replace(/\/$/, '') + '/', Astro.site).toString()
 ---
 
 <!doctype html>
@@ -29,11 +57,16 @@ const ogImage = image ? new URL(image, Astro.site).toString() : undefined
     <meta name="generator" content={Astro.generator} />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <meta property="og:type" content="website" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content={isArticle ? 'article' : 'website'} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={url} />
     {ogImage && <meta property="og:image" content={ogImage} />}
+    {isArticle && publishedTime && <meta property="article:published_time" content={publishedTime} />}
+    {isArticle && modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+    {isArticle && <meta property="article:author" content={authorName} />}
+    {isArticle && tags?.map((t) => <meta property="article:tag" content={t} />)}
     <link rel="icon" type="image/svg+xml" href={base + 'favicon.svg'} />
     <link
       rel="alternate"
@@ -41,6 +74,50 @@ const ogImage = image ? new URL(image, Astro.site).toString() : undefined
       title={title}
       href={base + 'rss.xml'}
     />
+    {/* JSON-LD：文章详情用 Article（带 headline/datePublished/author），其他页用 WebSite + SearchAction
+        —— SearchAction 让站内搜索框能被 Google 直接展示在搜索结果里 */}
+    {isArticle ? (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: pageTitle ?? title,
+          description,
+          image: ogImage,
+          datePublished: publishedTime,
+          dateModified: modifiedTime ?? publishedTime,
+          author: { '@type': 'Person', name: authorName, url: 'https://github.com/rrCathy' },
+          publisher: {
+            '@type': 'Person',
+            name: authorName,
+            url: 'https://github.com/rrCathy',
+          },
+          mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+          url: canonical,
+        })}
+      />
+    ) : (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          name: 'rrCathy 的博客',
+          description,
+          url: new URL(base, Astro.site).toString(),
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: {
+              '@type': 'EntryPoint',
+              urlTemplate: new URL(base, Astro.site).toString() + '?q={search_term_string}',
+            },
+            // 'query-input' 是 Schema.org 必填字段，描述用户输入怎么映射到 URL
+            'query-input': 'required name=search_term_string',
+          },
+        })}
+      />
+    )}
     <script is:inline>
       // 主题初始化:localStorage 优先,否则跟随系统;写 <html data-theme>
       // groupviz 视图与本站排版共用该属性切换浅/深。
@@ -66,7 +143,10 @@ const ogImage = image ? new URL(image, Astro.site).toString() : undefined
         <nav class="site-nav">
           <a href="/">项目</a>
           <a href={base} aria-current="page">博客</a>
+          <a href={base + 'tags/'}>标签</a>
+          <a href={base + 'archives/'}>归档</a>
           <a href="https://github.com/rrCathy" target="_blank" rel="noopener">GitHub ↗</a>
+          <SearchBox client:idle />
           <button
             class="theme-toggle"
             id="theme-toggle"

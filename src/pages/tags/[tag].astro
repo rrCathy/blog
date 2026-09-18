@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import PostCover from '../../components/PostCover.astro'
+import { getAllTags } from '../../lib/tags'
+import { tagTone } from '../../lib/tag-tone'
+
+export async function getStaticPaths() {
+  const groups = await getAllTags()
+  // params 用原始标签名（Astro 负责生成/匹配时的 URL 编码）；
+  // 自行 encodeURIComponent 反而会让静态路径与请求路径对不上（NoMatchingStaticPathFound）
+  return groups.map((g) => ({
+    params: { tag: g.tag.name },
+    props: { group: g },
+  }))
+}
+
+const { group } = Astro.props
+const base = import.meta.env.BASE_URL
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+---
+<BaseLayout
+  title="rrCathy 的博客"
+  pageTitle={`#${group.tag.name}`}
+  description={`标签「${group.tag.name}」下共 ${group.tag.count} 篇文章，按发布日期倒序排列。`}
+>
+  <div class="wrap">
+    <section class="blog-hero">
+      <p class="series-eyebrow">
+        <a href={base + 'tags/'}>← 全部标签</a>
+      </p>
+      <h1>
+        <span class="tag" data-tone={tagTone(group.tag.name)}>#{group.tag.name}</span>
+      </h1>
+      <p class="sub">共 {group.tag.count} 篇 · 按发布日期倒序</p>
+    </section>
+
+    <ul class="post-list">
+      {
+        group.posts.map((post) => (
+          <li class="post-item" data-tags={post.data.tags.join(',')}>
+            <div class="post-item-body">
+              <div class="post-meta">
+                <time datetime={post.data.pubDate.toISOString()}>
+                  {fmtDate(post.data.pubDate)}
+                </time>
+                {post.data.tags.map((t) => (
+                  <span class="tag" data-tone={tagTone(t)}>{t}</span>
+                ))}
+              </div>
+              <h2><a href={base + post.id + '/'}>{post.data.title}</a></h2>
+              {post.data.description && (
+                <p class="post-excerpt">{post.data.description}</p>
+              )}
+            </div>
+            <PostCover
+              cover={post.data.cover}
+              variant="card"
+              seed={post.id}
+              title={post.data.title}
+            />
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>

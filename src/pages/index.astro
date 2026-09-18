@@ -50,6 +50,13 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
       )
     }
 
+    <div class="list-controls">
+      <div class="sort-toggle" role="group" aria-label="文章排序">
+        <button type="button" class="sort-btn" data-sort="desc" aria-pressed="true">最新优先</button>
+        <button type="button" class="sort-btn" data-sort="asc" aria-pressed="false">最早优先</button>
+      </div>
+    </div>
+
     <div class="tag-filter" aria-label="按标签筛选文章">
       {tags.map((t) => (
         <button type="button" class="tag-chip" data-tag={t} data-tone={tagTone(t)} aria-pressed="false">
@@ -111,6 +118,36 @@ for (const p of all) for (const t of p.data.tags) if (!tags.includes(t)) tags.pu
         if (hit) shown++
       })
       if (empty) empty.hidden = shown > 0
+    })
+  })
+
+  // 时间排序:构建期按最新在前(desc)排好 DOM;「最早优先」给列表容器换
+  // column-reverse——DOM 顺序不动,标签筛选逻辑零改动。状态同步进 URL
+  // (?sort=asc/desc),分享链接、刷新、前进后退都保序。
+  const list = document.querySelector<HTMLElement>('.post-list')
+  const sortBtns = [...document.querySelectorAll<HTMLButtonElement>('.sort-btn')]
+
+  function applySort(mode: 'asc' | 'desc', pushUrl: boolean) {
+    if (!list) return
+    list.classList.toggle('is-asc', mode === 'asc')
+    sortBtns.forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.sort === mode)),
+    )
+    if (pushUrl) {
+      const url = new URL(window.location.href)
+      if (mode === 'asc') url.searchParams.set('sort', 'asc')
+      else url.searchParams.delete('sort') // desc 是缺省,URL 保持干净
+      window.history.replaceState(null, '', url)
+    }
+  }
+
+  // 初始:URL 带 sort=asc 就按最早优先(分享出去的链接可直接落位)
+  const initial = new URLSearchParams(window.location.search).get('sort')
+  if (initial === 'asc') applySort('asc', false)
+
+  sortBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applySort(btn.dataset.sort === 'asc' ? 'asc' : 'desc', true)
     })
   })
 </script>

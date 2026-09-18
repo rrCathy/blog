@@ -1,0 +1,8 @@
+# robots.txt —— 部署在 GitHub Pages (https://rrcathy.github.io/blog/)
+# 允许所有爬虫，声明 sitemap 位置。Astro 的 sitemap 集成默认产物是
+# sitemap-index.xml + sitemap-0.xml，base: '/blog/' 会自动加在前面。
+
+User-agent: *
+Allow: /
+
+Sitemap: https://rrcathy.github.io/blog/sitemap-index.xml
