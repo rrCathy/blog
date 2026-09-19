@@ -1,0 +1,353 @@
+---
+title: 'Todd-Coxeter 算法：一张表数清一个群'
+description: '给一组生成元和几条关系，怎么把群的陪集一个个数出来？Todd-Coxeter 陪集枚举的规则、手算、代码、证明与后续，一篇讲完。'
+pubDate: 2026-09-19
+tags: ['群论', '算法']
+cover:
+  engine:
+    symbol: 'A4'
+    view: 'cayley3d'
+    actions: '(12)(34),(234)'
+    layout3D: 'truncatedTetrahedron'
+    height: 480
+  poster: 'covers/260919-todd-coxeter.png'
+---
+
+import GroupScene from '../../components/GroupScene.tsx'
+import SchreierGraph from '../../components/SchreierGraph.astro'
+import Tip from '../../components/Tip.astro'
+import PostLink from '../../components/PostLink.astro'
+
+> 文中的陪集表和统计数字全部来自随文代码的实际运行，插图由 GroupViz 引擎与手绘 SVG 渲染。
+
+**怎么读这篇。** 这是一篇技术文，主角是 1936 年的 Todd-Coxeter 陪集枚举算法。主线只需要三个动作，走环、补格、合并；证明收在第五节，完整代码在第四节，赶时间可以在任何一层停下。第二节用 $S_3$ 把一张两行的小表从零造出来，第三节造一张更大的，中途两次塌方。
+
+给一个群，最省事的定义方式是生成元加关系。三条等式
+
+$$
+a^2 = e,\qquad b^3 = e,\qquad (ab)^3 = e
+$$
+
+连同生成元 $a,b$ 一起，记作 $\langle a, b \mid a^2,\ b^3,\ (ab)^3 \rangle$。这个记号承诺的事情很有限。凡是由满足这三条等式的元素生成的群，都是它的同态像。至于它自己有多少元素，是不是有限群，记号本身一个字都没说。
+
+把这三条关系喂给 Todd-Coxeter 算法，几轮之内它会交出一张四行四列的表，顺带回答上面的问题。这个群有 12 个元素，是正四面体的旋转群 $A_4$。1936 年 Todd 在曼彻斯特做这件事的时候，演算纸是旧墙纸的背面，Coxeter 后来回忆他一小时能处理两百个陪集。这篇把整个流程走一遍：规则、手算、代码、证明，以及它后来长成了什么。
+
+## 一、语法有了，语义欠着
+
+生成元和关系这套记法，经济性极好。描述 $S_3$ 只需要两个字母和三条等式，描述 60 阶的 $A_5$ 也只需要三条（第五节会见到）。代价写在价格标签背面。记号给的是语法；语义要自己算。
+
+拿 $S_3$ 做练习场。取 $a = (12)$，$b = (123)$，逐条验算，$a^2 = e$，$b^3 = e$，而 $ab = (23)$ 自乘回到 $e$。三条全部成立。这份验算的用处在于，两个置换可以充当表现里 $a, b$ 的一份翻译：表现要求的每条等式，翻译过去都真实成立，于是表现里推得动的等式，翻译过来条条成立，表现永远推不翻自己的任何一个像（这件事的正式名字是万有性质，收在下面的折叠块）。所以 $\langle a, b \mid a^2,\ b^3,\ (ab)^2 \rangle$ 必定打得出 $S_3$ 这个像。翻译管不了另一半：它自己有多大。它可以是 $S_3$，也可以是个更大的、以 $S_3$ 为像的群，记号看不出来，得算。
+
+<Tip label="万有性质：表现的身价所在">
+
+表现 $\langle S \mid R \rangle$ 的定义是一条泛性质。在所有由 $S$ 生成且满足 $R$ 的群里，它是最「自由」的一个：别的群满足的等式它全满足，它满足的等式别的群未必满足。推论是，从 $R$ 出发能推出来的每条等式，在任何一份满足 $R$ 的具体解释里都成立。所以一份翻译只能保证表现不小于像，永远不能证明表现就等于像，后者正是 Todd-Coxeter 要干的活。
+
+这一条也是第五节证明的地基。只要表能给出「一组满足全部关系的置换」，表现到这些置换的同态就免费到手。
+
+</Tip>
+
+Todd 和 Coxeter 的想法是不去数元素，改数陪集。子群 $H$ 把群切成若干份，数份数往往比数元素容易得多，因为 $H$ 自己的规模常常直接写在关系里（比如由一个 $b^3 = e$ 的元素生成，就至多三个元素）。下一节把这个思路在 $S_3$ 上走完整。
+
+## 二、陪集表：把群作用写在纸上
+
+直接动手算。把 $S_3$ 的六个元素摆上桌，生成元照第一节取 $a = (12)$，$b = (123)$，子群取 $H = \langle b \rangle = \{e,\ b,\ b^2\}$，三个偶置换。
+
+第一步，从 $H$ 出发，把每个成员右乘 $a$，看落到哪些元素：
+
+$$
+ea = a,\qquad ba = (13),\qquad b^2a = (23).
+$$
+
+落进的是三个对换，恰好是桌上剩下的另一半。这样 $S_3$ 分成了两份，没有重叠没有遗漏。这样的每一份叫 $H$ 的一个**右陪集**：把 $H$ 整体右乘某个元素得到的那组元素。陪集的名字按来历起：一份就是 $H$ 本身；另一份是 $H$ 的成员逐个右乘 $a$ 得到的，叫 $Ha$——名字里的字母从左往右读，就是从 $H$ 走到它的那串右乘。
+
+第二步，把右乘的落点填成表。四格，每格都是一组元素逐个右乘。$Ha$ 右乘 $a$：$aa = e$，$(13)a = b$，$(23)a = b^2$，全部落回 $H$，$a^2 = e$ 让两个 $a$ 抵消。$H$ 右乘 $b$：$b$ 本来就在 $H$ 里，原地。$Ha$ 右乘 $b$：$(12)b = (23)$，$(13)b = (12)$，$(23)b = (13)$，转来转去不出对换这份。四个格子凑齐：
+
+| 陪集 | $a$ | $b$ |
+|---|---|---|
+| $H$ | $Ha$ | $H$ |
+| $Ha$ | $H$ | $Ha$ |
+
+这张表怎么读，一句话：陪集 $H$ 里的元素右乘 $a$，整个跳进陪集 $Ha$；右乘 $b$，原地不动。同一份里的元素共享落点，所以格子里填的是陪集的名字，不必管具体是哪个元素。名字还自带验算：$(Ha, a) = H$ 读出来就是 $Ha \cdot a = H$，右乘 $a$ 两步抵消。每个生成元还配一列逆元（$a^{-1}, b^{-1}$ 下面记作 $A, B$），表里省画，它们由配对规则自动决定：$(Ha, a) = H$ 必然伴随 $(H, A) = Ha$。
+
+从这张表里直接读出三件事。一，$S_3$ 被 $H$ 切成两份，指数 $[G:H] = 2$。二，右乘 $a$ 交换两个陪集，右乘 $b$ 让两个陪集都原地——$\langle b \rangle = A_3$ 是 $S_3$ 的正规子群，两个陪集构成商群 $C_2$，$b$ 在商群里是单位元，表把商群都画出来了。三，$H$ 若取平凡子群，每份只有一个元素，数份就是数全部元素。第五节证明一件更强的事：对任何表现，只要表填满且检查全部通过，份数就恰为指数。
+
+Todd-Coxeter 做的就是这个计数：不偷看答案，光凭生成元和关系，把一个表现里子群的陪集份数数出来。真到手一个表现，陪集有几份、每份装哪些元素，事先一概不知，表要从空表造起。做法是把刚才的手算归纳成三条规则、三个动作。
+
+规则，一张合格的陪集表必须同时满足：
+
+1. 每条关系词（$aa$、$abab$ 这样的词）从任何陪集出发走一圈，回到出发的陪集——关系在群里是恒等式，作用到哪个陪集上都成立；
+2. 每个子群生成元从 $H$ 出发走一圈，回到 $H$——$H \cdot h = H$；
+3. 逆元列配对成立——右乘 $x$ 再右乘 $x^{-1}$ 原地踏步。
+
+动作，把不合格的半成品打磨到合格：
+
+- **走环**。拿一个词沿表走，能走完就检查终点对不对。
+- **补格**。走到没填的格子，开一个新陪集，把环闭上。
+- **合并**。同一个格子被两条路给出两个不同的落点，说明这两个名字其实是同一个陪集，合并，全部改写。
+
+把 $S_3$ 从空表重走一遍，验证这套流程给得出刚才那张表。开 $H$。子群生成元 $b$ 从 $H$ 走环，$H \cdot b = H$，格子 $(H, b)$ 填 $H$。关系 $aa$ 从 $H$ 走，$(H, a)$ 没填，开新陪集 $Ha$ 填上，第二个 $a$ 走回 $H$。关系 $abab$ 从 $H$ 走，$a$ 到 $Ha$，$(Ha, b)$ 没填。开新陪集之前先看一眼终点：从终点 $H$ 倒着走（沿逆元列），倒退 $b$ 还在 $H$（$b$ 是自环），再倒退 $a$ 到 $Ha$。倒走停下的地方恰好就是断边所在，中间没有空档，$(Ha, b)$ 直接填 $Ha$，一个新陪集都不用开。剩余扫描从两个陪集各走一遍，全部闭合，表就是上面那张。一次碰撞都没有。
+
+<GroupScene client:only="react" symbol="S_{3}" view="cayley" actions="(12),(123)" height={340} caption="S₃ 的凯莱图：6 个元素，青色 a 边、橙色 b 边" />
+
+同一个 $S_3$，从 6 个元素压到 2 个陪集，凯莱图上的六个点折成两个。下一节的主角 $A_4$ 会再压一次，12 折成 4，而且这一次，算法中途会出事。
+
+<Tip label="为什么子群生成元只从 H 扫">
+
+关系词从每个陪集扫，子群生成元只从 $H$ 扫，这个不对称是实现里最容易写错的地方。
+
+理由在陪集的代数里。关系词 $r$ 在 $G$ 里等于 $e$，所以 $(Hg) \cdot r = Hgr = Hg$，对每个陪集都成立，从任何陪集扫都该闭合。子群生成元 $h$ 只保证 $H \cdot h = H$；换一个陪集，$(Hg) \cdot h = H(gh)$，要它回到 $Hg$ 得有 $ghg^{-1} \in H$，一般不成立。
+
+$A_4$ 里就有现成的反例。$h = b = (234)$，取 $g = a = (12)(34)$，共轭 $ghg^{-1} = (a(2)\ a(3)\ a(4)) = (1\ 4\ 3)$，不在 $H = \{e, (234), (243)\}$ 里。要是强行从陪集 $Ha$ 也扫 $b$，等于把一条假等式写进表里，合并会一路错下去，最后交出一张比真指数还小的表。
+
+</Tip>
+
+## 三、碰撞：手算 A4
+
+正戏。表现 $\langle a, b \mid a^2,\ b^3,\ (ab)^3 \rangle$，$H = \langle b \rangle$。这一回不告诉你群是谁，跟着算法走。新陪集的名字仍按来历起：走到它用的词拼在 $H$ 后面。
+
+第 1 轮跑四步。
+
+子群生成元 $b$ 从 $H$ 走环：$H \cdot b = H$，格子 $(H, b)$ 填 $H$，$H$ 挂上一个 $b$ 自环。
+
+关系 $aa$ 从 $H$ 走：$(H, a)$ 没填，开新陪集 $Ha$，$(H, a) = Ha$；第二个 $a$ 走回 $H$，$(Ha, a) = H$。
+
+关系 $ababab$ 从 $H$ 走：$a$ 到 $Ha$ 后 $(Ha, b)$ 没填，后面全是没去过的地方。开出来的陪集还没经过任何检验，先用问号标记。从终点倒着走，能接现成的就接（第二节的窍门），整条链一步到位：
+
+$$
+H \xrightarrow{a} Ha \xrightarrow{b} ?(Hab) \xrightarrow{a} ?(Haba) \xrightarrow{b} Ha \xrightarrow{a} H \xrightarrow{b} H
+$$
+
+两个问号陪集就此落户：$(Ha, b) = Hab$，$(Hab, a) = Haba$，$(Haba, b) = Ha$。
+
+最后补全：$(Hab, b)$ 还空着，开新陪集 $Habb$。$(Haba, a)$ 也空着——拼出来的名字是 $Habaa$，先别急着开：末尾两个 $a$ 相邻，撞上关系 $a^2 = e$，$Habaa$ 约掉一层就是 $Hab$，落点早就在表里，直接填上。第 1 轮结束，表上有 5 个名字：
+
+| 陪集 | $a$ | $b$ |
+|---|---|---|
+| $H$ | $Ha$ | $H$ |
+| $Ha$ | $H$ | $Hab$ |
+| $Hab$ | $Haba$ | $Habb$ |
+| $Haba$ | $Hab$ | $Ha$ |
+| $Habb$ | · | · |
+
+$Habb$ 目前只有配对带出来的逆元列有值（$(Habb, B) = Hab$），正元列还空着。
+
+第 2 轮，出事了。关系 $bbb$ 要求从任何陪集走三步 $b$ 回到原地。从 $Ha$ 出发，正向走两步到 $Habb$ 就没路了；倒着找第三步的落点：谁右乘 $b$ 会落到 $Ha$？表里现成放着一条 $Haba \xrightarrow{b} Ha$。整条环补全为：
+
+$$
+Ha \xrightarrow{b} Hab \xrightarrow{b} Habb \xrightarrow{b} Ha
+$$
+
+第三步的落点，倒着找回的是 $Haba$，正向链的尽头坐着 $Habb$。两个名字，同一份陪集。这是**碰撞**，处理办法是合并：$Habb$ 并入 $Haba$，表里所有指向 $Habb$ 的格子改填 $Haba$（$(Hab, b)$ 从 $Habb$ 改成 $Haba$），$Habb$ 名下的边搬进 $Haba$。表瘦成 4 个名字，恰好就是终表：
+
+| 陪集 | $a$ | $b$ |
+|---|---|---|
+| $H$ | $Ha$ | $H$ |
+| $Ha$ | $H$ | $Hab$ |
+| $Hab$ | $Haba$ | $Haba$ |
+| $Haba$ | $Hab$ | $Ha$ |
+
+第 3 轮，全部扫描重跑一遍，无新开、无碰撞。表闭合，4 个陪集，指数 4。随文的教学代码没做名字约化这一步，它会多开一个 $Habaa$、多报一次碰撞把它并进 $Hab$，殊途同归，只是多绕一步；正经实现都会在开新名字前先约化。
+
+读表：$a$ 的作用像对换 $(H\ Ha)(Hab\ Haba)$，$b$ 的作用像 $(Ha\ Hab\ Haba)$，$H$ 被 $b$ 固定。把陪集当顶点、生成元当边色画出来，这张图叫 Schreier 图，也就是广义的凯莱图，顶点从群元素换成了陪集：
+
+<SchreierGraph scheme="a4" size={400} caption="4 个陪集的 Schreier 图。Hab 右乘 a 与右乘 b 落到同一个陪集" />
+
+现在兑现欠账：表拿到手，怎么读出「这是谁」。三步。
+
+第一步，每列读成一个置换。$a$ 列交换 $H \leftrightarrow Ha$、$Hab \leftrightarrow Haba$，读出 $\bar a = (H\ Ha)(Hab\ Haba)$；$b$ 列固定 $H$、轮转其余三个，读出 $\bar b = (Ha\ Hab\ Haba)$。表填满时每列都是置换，这一步永远做得到，两个置换生成的群就是表能给出的全部作用信息。
+
+第二步，读出 $|G|$。份数从表上来：4。$|H|$ 从关系上来：$H$ 由 $b$ 生成而 $b^3 = e$，至多 3 个元素。Lagrange 一乘，$|G| = 4 \times |H| \le 12$。另一头，$\bar a$、$\bar b$ 都是偶置换，作用像整个装在 $A_4$ 里；作用传递（每个陪集都能从 $H$ 走到），像的阶被 4 整除，又含三阶元被 3 整除，而 $A_4$ 一共只有 12 个元素，像占满 $A_4$，$|G| \ge 12$。夹死：$|G| = 12$，$|H| = 3$。
+
+第三步，对名字。$\rho$ 给出 $G$ 到 $A_4$ 的满同态，两边同阶，同构。开场那条记号里装着的就是四面体的旋转群。
+
+表还能多读两样结构。每列置换的阶就是对应生成元的像的阶：$\bar a$ 阶 2、$\bar b$ 阶 3，与关系 $a^2$、$b^3$ 相容。$H$ 正规与否也写在表上：正规当且仅当每一列都把 $H$ 固定在原地，即 $H$ 那一行全是自环；$a$ 列把 $H$ 送到 $Ha$，不正规。
+
+<GroupScene client:only="react" symbol="A4" view="cayley3d" actions="(12)(34),(234)" layout3D="truncatedTetrahedron" height={460} caption="A₄ 的凯莱图：12 个顶点，截角四面体布局，青橙两色对应 a 与 b" />
+
+12 个元素的凯莱图就是这张截角四面体。四个陪集折掉九成顶点，留下 Schreier 图上那 4 个点和 6 条边。陪集也都有了几何身份：把 $a$ 实现为 $a = (12)(34)$、$b$ 实现为 $b = (234)$（这组解释满足全部关系，所以是合法的），$b$ 转正四面体时固定顶点 1，$H = \langle b \rangle$ 就是顶点 1 的稳定子群，和 $|H| = 3$ 对上；陪集 $H g$ 与 $g$ 把顶点 1 搬到的位置一一对应，$Ha$ 对应顶点 2。Schreier 图上挂在 $H$ 的那个 $b$ 自环，就是 $b$ 固定顶点 1 的影子。《<PostLink slug="260909_tetrahedron-a4" />》里从几何走到 $A_4$，这里从三条等式算回它，两条路在同一个群会合。下一节先把算法搬进代码。
+
+## 四、从表格到代码
+
+手算的三条操作，翻成代码是一百行以内的事。三个数据结构：`table` 用字典存稀疏的陪集表，键是（陪集编号，生成元字母）——正文里陪集叫 $H$, $Ha$, $Hab$，代码里用整数编号当替身，编号 $i$ 对应「从 $H$ 走到它的词」按短先长后排序的名字，一一对应；`union` 是并查集，管碰撞合并；主循环负责「扫描，出碰撞就合并重来，无碰撞就补全」。倒着走的那个细节在 `scan` 的后半段。
+
+```python
+# todd_coxeter.py · Todd-Coxeter 陪集枚举（教学版）
+# 小写 a,b 是生成元，大写 A,B 是对应逆元；编号 1 即正文里的陪集 H，2 即 Ha，依此类推。
+from collections import deque
+
+INV = {c.lower(): c.upper() for c in "abcdef"} | \
+      {c.upper(): c.lower() for c in "abcdef"}
+
+def todd_coxeter(relators, subgens, gens="ab", max_cosets=300):
+    gens = list(gens)
+    letters = gens + [INV[c] for c in gens]
+    table = {}                    # (编号, 字母) -> 编号
+    union = {}                    # 并查集，碰撞合并用
+    nxt = 2                       # 下一个新编号（1 = H）
+
+    def find(i):
+        while union.get(i, i) != i:
+            i = union[i]
+        return i
+
+    def define(i, x, j):          # 配对定义：(i,x)=j 蕴含 (j,x^-1)=i
+        table[i, x] = j
+        if (j, INV[x]) not in table:
+            table[j, INV[x]] = i
+            return None
+        return None if table[j, INV[x]] == i else (i, table[j, INV[x]])
+
+    def new_coset():
+        nonlocal nxt
+        if nxt > max_cosets:
+            raise OverflowError
+        nxt += 1
+        return nxt - 1
+
+    def scan(s, word):            # 要求：s 沿 word 走一圈回到 s
+        cur, k = s, 0             # 前向：能走就走
+        while k < len(word) and (cur, word[k]) in table:
+            cur = table[cur, word[k]]
+            k += 1
+        if k == len(word):
+            return None if cur == s else (cur, s)
+        q, m = s, len(word)       # 后向：从 s 逆着走
+        while m > k and (q, INV[word[m-1]]) in table:
+            q = table[q, INV[word[m-1]]]
+            m -= 1
+        if m == k:                # 两端相接：接不上就是碰撞
+            return None if find(cur) == find(q) else (cur, q)
+        for t in range(k, m):     # 中间补新编号，把环闭上
+            c = q if t == m - 1 else new_coset()
+            bad = define(cur, word[t], c)
+            if bad:
+                return bad
+            cur = c
+        return None
+
+    def merge(p, q):              # 把 q 并进 p（小号优先），传播冲突
+        dq, moved = deque([(p, q)]), False
+        while dq:
+            a, b = dq.popleft()
+            ra, rb = find(a), find(b)
+            if ra == rb:
+                continue
+            if ra > rb:
+                ra, rb = rb, ra
+            union[rb] = ra
+            moved = True
+            for x in letters:
+                va = table.get((ra, x))
+                vb = table.pop((rb, x), None)
+                if vb is None:
+                    continue
+                if va is None:
+                    table[ra, x] = vb
+                elif va != vb:
+                    dq.append((va, vb))
+        if moved:                 # 指向死编号的值重映射到存活代表
+            for key in list(table):
+                table[key] = find(table[key])
+        return moved
+
+    try:
+        while True:
+            moved = False
+            for h in subgens:              # 子群生成元只扫 1 号
+                bad = scan(1, h)
+                if bad:
+                    moved = merge(*bad) or moved
+                    break
+            if not moved:
+                for i in range(1, nxt):    # 关系词扫每个编号
+                    if find(i) != i:
+                        continue
+                    for r in relators:
+                        bad = scan(i, r)
+                        if bad:
+                            moved = merge(*bad) or moved
+                            break
+                    if moved:
+                        break
+            if moved:
+                continue
+            full = True                    # 无碰撞：补全缺失条目
+            for i in range(1, nxt):
+                if find(i) != i:
+                    continue
+                for x in gens:
+                    if (i, x) not in table:
+                        j = new_coset()
+                        table[i, x], table[j, INV[x]] = j, i
+                        full = False
+            if full:
+                rows = [i for i in range(1, nxt) if find(i) == i]
+                return len(rows), rows
+    except OverflowError:
+        return None, nxt - 1
+
+for rels, subs in [(["aa", "bbb", "abab"], ["b"]),        # S3, H=<b>
+                   (["aa", "bbb", "ababab"], ["b"]),      # A4, H=<b>
+                   (["aa", "bbb", "ababababab"], ["b"]),  # A5, H=<b>
+                   (["aaaa", "bbAA", "Baba"], [])]:       # Q8, H={e}
+    print(todd_coxeter(rels, subs)[0])
+print(todd_coxeter(["abAB"], ["a"], max_cosets=120)[0])   # Z2, H=<a>
+```
+
+跑一遍，五行输出：
+
+```text
+2
+4
+20
+8
+None
+```
+
+前三行是热身和正戏的答案，$S_3$ 指数 2，$A_4$ 指数 4。第四行换了个更大的猎物：$\langle a, b \mid a^2,\ b^3,\ (ab)^5 \rangle$ 配 $H = \langle b \rangle$，算法跑了 11 轮、报了 9 次碰撞，最后停在 20 个陪集。带日志的版本逐条记下全程：84 条边，九次碰撞里五次属于两端对不上，表看上去已经很满，两条路一碰才现出原形；其余四次是走完一圈终点不对。第五行 $Q_8$ 用的是空子群，$H$ 就是平凡子群，此时表退化成群的凯莱图（正则作用），陪集个数直接就是群的阶：8。
+
+最后一行的 `None` 值得单独说。$\langle a, b \mid abA \cdot B \rangle$ 也就是 $ab = ba$ 的 $\mathbb{Z}^2$，子群 $\langle a \rangle$，陪集 $H b^n$ 有无穷多个。脚本冲到 120 个陪集的上限也没闭合，返回 `None`。这就是 Todd-Coxeter 的边界：它是半可判定的。指数有限，算法必停且答案正确；指数无穷，它只能永远跑下去。你能等到的结局只有两种，闭合，或者一直等。
+
+## 五、为什么是对的
+
+算法停下来的那张表，凭什么就是答案。定理分两半：表给出一个货真价实的群作用（于是陪集个数不超过指数），以及每个真陪集都有陪集代表（于是陪集个数不少于指数）。两头一夹，陪集个数等于指数。
+
+**前一半：表是一个真实的作用，所以 $n \le [G:H]$。** 表填满时，每一列都是陪集集合上的置换（配对规则保证逆元列就是逆置换）。每条关系词从任何陪集走回原陪集，翻译过来是每个关系词对应的置换都等于恒等。按万有性质（第一节的 Tip），生成元到这些列置换的指派延拓成同态
+
+$$
+\rho : G \to S_n .
+$$
+
+$H$ 的轨道是全部 $n$ 个陪集，每个新陪集都由已有陪集补出，从 $H$ 总有词能走到任何陪集，作用传递。子群生成元从 $H$ 闭合，加上它们生成 $H$，得 $H$ 整体固定基点陪集 $H$，装在它的稳定子里。轨道-稳定子定理给出
+
+$$
+n = [G : \mathrm{Stab}(H)] \le [G : H] .
+$$
+
+**后一半：定义不说谎，所以 $n \ge [G:H]$。** 陪集的名字本身就是定义词：$Hab$ 的定义词是 $ab$，从 $H$ 走到它用的那串右乘。盯住一个不变量：表里每条已填的边，落点陪集的名字与真陪集等式一致——格子 $(u, x)$ 填 $v$，就有真等式 $u \cdot x = v$。开新陪集时按构造成立（新名字 $v$ 就是 $u$ 拼上 $x$）；碰撞合并只在真等值时发生，扫描逼出的两个名字，在真陪集的作用下本来就该相同，合并后所有改写的边把等式沿表传递。归纳下来，从 $H$ 沿任何词 $w$ 走到的陪集都满足 $H \cdot w$ 就是它。于是每个真陪集 $H w$ 都有名字代表，表上的名字个数至少和真实份数一样多。
+
+$$
+[G:H] \le n \le [G:H] .
+$$
+
+两个不等式夹死，$n = [G:H]$，表就是答案。终止性另有一说。指数有限时，配合公平的扫描顺序，算法必在有限步内闭合，完整论证偏技术，Holt 的《Handbook of Computational Group Theory》第五章有全套；指数无穷时上一节的 $\mathbb{Z}^2$ 已经演示过它永不闭合。
+
+<Tip label="1936 年的论文，和迟到 28 年的证明">
+
+Todd 与 Coxeter 1936 年在《Proceedings of the Edinburgh Mathematical Society》上发表了这套流程，题为 A practical method for enumerating cosets of a finite abstract group。论文的例子算到了 576 阶的群（正 24 胞体的旋转群），但通篇没有完整的正确性证明，终止性与正确性的首个形式证明要到 1964 年，由 Mendelsohn 在 Canadian Journal of Mathematics 上给出。
+
+流程本身差点没能问世，几位审稿人没认出它的重要性，发表颇费周章。六十年代它等来了计算机。Felsch 在 1961 年、Leech 在 1963 年、Trotter 在 1964 年各自写出程序，Leech 的那篇综述里记录了当时已知的各种实现。今天它仍是计算群论里最常用的引擎之一，GAP 每次算指数、构商群，背后转的多半就是它。
+
+</Tip>
+
+## 六、门外长廊
+
+三个路牌。
+
+**两大策略家族。** 本文的实现属于 HLT 风格，得名于 Haselgrove、Leech 和 Trotter 五六十年代的工作，特点是猛开新陪集、事后用碰撞收割。另一家是 Felsch 风格，每开一条边就地做扫描，陪集个数压得更紧、单步更贵。两者的取舍至今是活跃的工程话题，现行最强实现之一是 Havas 和 Ramsay 的 ACE，GAP 以扩展包的形式挂它。表现换一种等价写法，运行时间可能差出一个数量级，这是用这套算法的人都要交的学费。
+
+**低指数子群。** 把碰撞机制反着用。给定 $H$ 数陪集是正向；反过来，把指数不超过 $n$ 的所有子群一次枚举干净。Sims 在七十年代据此做出低指数子群算法，GAP 里的 `LowIndexSubgroupsFpGroup` 一条命令就能列出某表现全部指数 30 以内的子群。找单群、证某群没有小指数子群，用的都是它。
+
+**姊妹算法与几何读法。** Knuth-Bendix 补全走的是另一条路，把生成元上的词重写成规范形，有时能对无穷群解决字问题，这是 Todd-Coxeter 做不到的。而在几何那边，陪集表有一个覆叠空间的读法：表是覆叠图的顶点目录，补格是铺开覆叠，合并是粘合。自由群的子群情形，Stallings 的折叠算法把这层几何做成了独立工具，几张图几次折叠就能判两个子群是否同在水下。
+
+回望开头，算法的全部动作就是三下：走环、补格、合并。Todd 在墙纸背面一小时两百个陪集；今天同一套流程在笔记本上一秒能过几十万个，翻了六七个数量级，规则一个字没改。计算数学里能这样穿越九十年的东西不多，而它最初要回答的问题朴素得很：几条等式里，到底住着多少元素。

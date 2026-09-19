@@ -1,0 +1,225 @@
+---
+/**
+ * SchreierGraph —— 陪集表画成 Schreier 图，纯静态 SVG。
+ *
+ * Todd-Coxeter 枚举出的陪集表，行当顶点、生成元当边色，就是 Schreier 图
+ * （广义凯莱图：顶点不是群元素而是陪集）。引擎画的是群的凯莱图（顶点 =
+ * 元素），陪集图引擎不管，所以这篇手绘。数据全部来自
+ * .tmp-todd-coxeter/tc.py 的实跑结果，不是手摆的。
+ *
+ * 配色约定同 PrisonerChain：结构色走主题变量，生成元身份色固定调色板。
+ *
+ * scheme  'a4'  A₄ = <a,b | a²,b³,(ab)³>，H = <b>，4 行：
+ *               a-边 {1,2}{3,4}；b 环 2→3→4→2，行 1 被 b 固定
+ *         's3'  S₃ = <a,b | a²,b³,(ab)²>，H = <b>，2 行：
+ *               a-边 1↔2；b 把两行各自固定
+ * size    svg 最大宽度 px，缺省 420
+ * caption 图下说明
+ * compact 紧凑模式：去外边距与图注，供并排图集
+ */
+interface Props {
+  scheme: 'a4' | 's3'
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { scheme, size = 420, caption, compact = false } = Astro.props
+
+/** 生成元身份色（固定调色板，与深浅主题无关） */
+const A_COLOR = '#0e9488'
+const B_COLOR = '#d97706'
+const NODE_R = 17
+
+type Pt = { x: number; y: number }
+
+let VB_W = 440
+let VB_H = 410
+let nodes: { id: number; label: string; p: Pt }[] = []
+const aEdges: [number, number][] = []
+const bEdges: [number, number][] = []
+const bLoops: number[] = []
+const aLoops: number[] = []
+
+if (scheme === 'a4') {
+  // 四面体投影：H 在顶，Hab/Haba 在底边两端，Ha 居中（b-三角形 Ha→Hab→Haba 的尖）
+  nodes = [
+    { id: 1, label: 'H', p: { x: 220, y: 66 } },
+    { id: 2, label: 'Ha', p: { x: 220, y: 238 } },
+    { id: 3, label: 'Hab', p: { x: 86, y: 340 } },
+    { id: 4, label: 'Haba', p: { x: 354, y: 340 } },
+  ]
+  aEdges.push([1, 2], [3, 4])
+  bEdges.push([2, 3], [3, 4], [4, 2])
+  bLoops.push(1)
+} else {
+  VB_H = 232
+  nodes = [
+    { id: 1, label: 'H', p: { x: 148, y: 122 } },
+    { id: 2, label: 'Ha', p: { x: 292, y: 122 } },
+  ]
+  aEdges.push([1, 2])
+  bLoops.push(1, 2)
+}
+
+const P = (id: number): Pt => nodes.find((v) => v.id === id)!.p
+const labelOf = (id: number): string => nodes.find((v) => v.id === id)!.label
+
+/** 从 from 出发留出节点半径的线段终点 */
+const trimmed = (from: Pt, to: Pt, pad: number): Pt => {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const L = Math.hypot(dx, dy) || 1
+  return { x: from.x + (dx / L) * pad, y: from.y + (dy / L) * pad }
+}
+
+/** 直边路径（两端缩进节点半径） */
+const linePath = (from: Pt, to: Pt): string => {
+  const s = trimmed(from, to, NODE_R + 1.5)
+  const e = trimmed(to, from, NODE_R + 4)
+  return `M ${s.x} ${s.y} L ${e.x} ${e.y}`
+}
+
+/** 3→4 的 b 边：与 a 边平行，向下弯开 */
+const bParallelPath = (from: Pt, to: Pt): string => {
+  const s = trimmed(from, to, NODE_R + 1.5)
+  const e = trimmed(to, from, NODE_R + 4)
+  const my = Math.max(s.y, e.y) + 30
+  const mx = (s.x + e.x) / 2
+  return `M ${s.x} ${s.y} Q ${mx} ${my} ${e.x} ${e.y}`
+}
+
+/** 自环：朝指定方向鼓出去的小圈 */
+const loopPath = (at: Pt, dir: 'up' | 'down'): string => {
+  const sgn = dir === 'up' ? -1 : 1
+  const sx = at.x + 9, sy = at.y + sgn * (NODE_R - 2)
+  const ex = at.x - 9, ey = at.y + sgn * (NODE_R - 2)
+  const c1 = { x: at.x + 34, y: at.y + sgn * (NODE_R + 40) }
+  const c2 = { x: at.x - 34, y: at.y + sgn * (NODE_R + 40) }
+  return `M ${sx} ${sy} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${ex} ${ey}`
+}
+
+const aria =
+  scheme === 'a4'
+    ? 'A4 的 4 个陪集画成 Schreier 图：顶点 H、Ha、Hab、Haba；a 边连接 H-Ha 与 Hab-Haba，b 边沿 Ha、Hab、Haba 绕三角形一周，H 有一个 b 自环'
+    : 'S3 的 2 个陪集画成 Schreier 图：顶点 H 与 Ha，a 边相连，两个陪集各有一个 b 自环'
+---
+
+<figure class={'sg' + (compact ? ' is-compact' : '')} style={`--sg-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    <defs>
+      <marker id="sg-arrow-b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill={B_COLOR} />
+      </marker>
+    </defs>
+
+    {/* a 边：无向（a² = e，来回同一条） */}
+    {aEdges.map(([u, v]) => (
+      <path d={linePath(P(u), P(v))} fill="none" stroke={A_COLOR} stroke-width="2.4" stroke-linecap="round" />
+    ))}
+
+    {/* b 边：有向 */}
+    {scheme === 'a4'
+      ? bEdges.map(([u, v]) => (
+          <path
+            d={u === 3 && v === 4 ? bParallelPath(P(u), P(v)) : linePath(P(u), P(v))}
+            fill="none"
+            stroke={B_COLOR}
+            stroke-width="2.4"
+            stroke-linecap="round"
+            marker-end="url(#sg-arrow-b)"
+          />
+        ))
+      : null}
+
+    {/* 自环 */}
+    {bLoops.map((id) => (
+      <path
+        d={loopPath(P(id), scheme === 'a4' || id === 1 ? 'up' : 'down')}
+        fill="none"
+        stroke={B_COLOR}
+        stroke-width="2.4"
+        stroke-linecap="round"
+        marker-end="url(#sg-arrow-b)"
+      />
+    ))}
+    {aLoops.map((id) => (
+      <path d={loopPath(P(id), 'up')} fill="none" stroke={A_COLOR} stroke-width="2.4" stroke-linecap="round" />
+    ))}
+
+    {/* 顶点 */}
+    {nodes.map(({ id, label, p }) => (
+      <g>
+        <circle cx={p.x} cy={p.y} r={NODE_R} fill="var(--bg-soft)" stroke="var(--text-dim)" stroke-width="1.8" />
+        <text
+          x={p.x}
+          y={p.y}
+          text-anchor="middle"
+          dominant-baseline="central"
+          font-size={label.length > 2 ? 10.5 : 14}
+          font-weight="600"
+          fill="var(--text)"
+        >
+          {label}
+        </text>
+      </g>
+    ))}
+  </svg>
+  {
+    !compact && (
+      <div class="sg-legend">
+        <span class="sg-key">
+          <i style={`background:${A_COLOR}`} />
+          a-边 · a² = e，来回同一条
+        </span>
+        <span class="sg-key">
+          <i style={`background:${B_COLOR}`} />
+          b-边 · b³ = e，沿箭头绕一圈
+        </span>
+      </div>
+    )
+  }
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .sg {
+    margin: 1.6rem 0;
+  }
+  .sg.is-compact {
+    margin: 0;
+  }
+  .sg svg {
+    width: 100%;
+    max-width: var(--sg-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .sg-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem 1.1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+  }
+  .sg-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .sg-key i {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .sg figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
