@@ -1,0 +1,215 @@
+---
+/**
+ * ButterflyDiagram —— radix-2 FFT 的蝶形数据流图，纯静态 SVG。
+ *
+ * 层 l 把两行（相距 d）配成一个蝶形：上支加上支、下支相减，公共的旋转因子
+ * 写在交叉处。DIT 的跨距自 1 起翻倍、输入位反转；DIF 的跨距自 n/2 起减半、
+ * 输出位反转，两者拓扑相同，只是旋转因子落在不同的层上。
+ *
+ * 旋转因子标注规则（自蝶形序号 b 推出，已对 4/8 点逐层核过）：
+ *   DIT 层 l：ω_{2^l}^{b mod 2^(l-1)}
+ *   DIF 层 l：ω_{2^(m-l+1)}^{b mod 2^(m-l)}
+ *
+ * 配色约定同 SchreierGraph：结构色走主题变量，标注色固定调色板。
+ */
+interface Props {
+  /** DFT 长度，4 或 8 */
+  points?: 4 | 8
+  /** dit = 按时间抽取（输入位反转）；dif = 按频率抽取（输出位反转） */
+  variant?: 'dit' | 'dif'
+  /** svg 最大宽度 px */
+  size?: number
+  caption?: string
+  /** 紧凑模式：去外边距与图注，供并排 */
+  compact?: boolean
+}
+
+const { points = 8, variant = 'dit', size = 560, caption, compact = false } = Astro.props
+
+/** 旋转因子标注色（固定调色板，与主题无关） */
+const TW_COLOR = '#0e9488'
+
+const m = Math.round(Math.log2(points))
+const rows = points
+const cols = m + 1
+
+const dy = 50
+const dx = points >= 8 ? 116 : 92
+const padX = 58
+const padTop = 40
+const padBottom = 24
+
+const VB_W = padX * 2 + (cols - 1) * dx
+const VB_H = padTop + (rows - 1) * dy + padBottom
+
+const X = (c: number) => padX + c * dx
+const Y = (r: number) => padTop + r * dy
+
+const SUB = '₀₁₂₃₄₅₆₇₈₉'
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹'
+const sub = (k: number) =>
+  String(k)
+    .split('')
+    .map((d) => SUB[Number(d)])
+    .join('')
+const sup = (k: number) =>
+  String(k)
+    .split('')
+    .map((d) => SUP[Number(d)])
+    .join('')
+
+const bitrev = (x: number) => {
+  let r = 0
+  for (let i = 0; i < m; i++) r |= ((x >> i) & 1) << (m - 1 - i)
+  return r
+}
+
+/** 每层每个蝶形：起止行 r0/r1、所在层 l、旋转因子标签 */
+type Cell = { l: number; r0: number; r1: number; tw: string }
+const cells: Cell[] = []
+
+for (let l = 1; l <= m; l++) {
+  const d = variant === 'dit' ? 2 ** (l - 1) : 2 ** (m - l)
+  const base = variant === 'dit' ? 2 ** l : 2 ** (m - l + 1)
+  const mod = variant === 'dit' ? 2 ** (l - 1) : 2 ** (m - l)
+  let b = 0
+  for (let r = 0; r < rows; r++) {
+    if (r + d >= rows || Math.floor(r / d) % 2 !== 0) continue
+    const k = mod > 0 ? b % mod : 0
+    const tw = k === 0 ? '1' : `ω${sub(base)}${sup(k)}`
+    cells.push({ l, r0: r, r1: r + d, tw })
+    b++
+  }
+}
+
+/** 输入/输出行标签：DIT 输入位反转，DIF 输出位反转 */
+const inLabel = (r: number) => (variant === 'dit' ? bitrev(r) : r)
+const outLabel = (r: number) => (variant === 'dit' ? r : bitrev(r))
+
+const stageText = variant === 'dit' ? '按时间抽取 DIT' : '按频率抽取 DIF'
+const headNote =
+  variant === 'dit'
+    ? `输入位反转：x${sub(bitrev(0))}, x${sub(bitrev(1))}, …`
+    : `输出位反转：X${sub(bitrev(0))}, X${sub(bitrev(1))}, …`
+
+const aria = `${points} 点 radix-2 ${stageText} 蝶形图，共 ${m} 层，每层 ${points / 2} 个蝶形，${headNote}`
+---
+
+<figure class={'bf' + (compact ? ' is-compact' : '')} style={`--bf-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    {/* 层标签 */}
+    {Array.from({ length: m }, (_, i) => (
+      <text
+        x={(X(i) + X(i + 1)) / 2}
+        y={padTop - 20}
+        text-anchor="middle"
+        font-size="11"
+        fill="var(--text-soft)"
+      >
+        {`第 ${i + 1} 层`}
+      </text>
+    ))}
+    <text x={X(0)} y={padTop - 20} text-anchor="middle" font-size="11" fill="var(--text-soft)">
+      输入
+    </text>
+    <text
+      x={X(cols - 1)}
+      y={padTop - 20}
+      text-anchor="middle"
+      font-size="11"
+      fill="var(--text-soft)"
+    >
+      输出
+    </text>
+
+    {/* 蝶形连线：每个蝶形四根线（a→A, a→B, b→A, b→B） */}
+    {cells.map(({ l, r0, r1 }) => {
+      const xa = X(l - 1)
+      const xb = X(l)
+      return (
+        <g stroke="var(--text-dim)" stroke-width="1" opacity="0.5" fill="none">
+          <line x1={xa} y1={Y(r0)} x2={xb} y2={Y(r0)} />
+          <line x1={xa} y1={Y(r0)} x2={xb} y2={Y(r1)} />
+          <line x1={xa} y1={Y(r1)} x2={xb} y2={Y(r0)} />
+          <line x1={xa} y1={Y(r1)} x2={xb} y2={Y(r1)} />
+        </g>
+      )
+    })}
+
+    {/* 旋转因子标注 */}
+    {cells.map(({ l, r0, r1, tw }) => (
+      <text
+        x={(X(l - 1) + X(l)) / 2}
+        y={(Y(r0) + Y(r1)) / 2}
+        text-anchor="middle"
+        dominant-baseline="central"
+        font-size={tw === '1' ? 9.5 : 10.5}
+        fill={tw === '1' ? 'var(--text-soft)' : TW_COLOR}
+        stroke="var(--bg)"
+        stroke-width="3.5"
+        stroke-linejoin="round"
+        paint-order="stroke"
+      >
+        {tw}
+      </text>
+    ))}
+
+    {/* 每层的节点 */}
+    {Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => (
+        <circle cx={X(c)} cy={Y(r)} r="3.6" fill="var(--text)" />
+      )),
+    )}
+
+    {/* 输入行标签 */}
+    {Array.from({ length: rows }, (_, r) => (
+      <text
+        x={X(0) - 11}
+        y={Y(r)}
+        text-anchor="end"
+        dominant-baseline="central"
+        font-size="10.5"
+        fill="var(--text-dim)"
+      >
+        {`x${sub(inLabel(r))}`}
+      </text>
+    ))}
+
+    {/* 输出行标签 */}
+    {Array.from({ length: rows }, (_, r) => (
+      <text
+        x={X(cols - 1) + 12}
+        y={Y(r)}
+        text-anchor="start"
+        dominant-baseline="central"
+        font-size="10.5"
+        fill="var(--text-dim)"
+      >
+        {`X${sub(outLabel(r))}`}
+      </text>
+    ))}
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .bf {
+    margin: 1.6rem 0;
+  }
+  .bf.is-compact {
+    margin: 0;
+  }
+  .bf svg {
+    width: 100%;
+    max-width: var(--bf-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .bf figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

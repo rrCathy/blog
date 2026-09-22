@@ -1,0 +1,164 @@
+---
+/**
+ * DecompFlow —— Cooley-Tukey 一层分解的结构示意，纯静态 SVG。
+ *
+ * 对应正文那条公式的三个部件：陪集上的 4 点 DFT（内层）、逐项乘旋转因子
+ * （中间）、商群上的 3 点 DFT（外层）。例取 n = 12 = 3 × 4，与正文一致。
+ *
+ * 三个陪集用固定调色板（与文中 cycle 视图的陪集着色同族），
+ * 结构色走主题变量。
+ */
+interface Props {
+  caption?: string
+  size?: number
+  compact?: boolean
+}
+
+const { caption, size = 720, compact = false } = Astro.props
+
+/** 三个陪集的身份色（固定，深浅主题都可读） */
+const GROUPS = [
+  { color: '#d9534f', label: '0,3,6,9' },
+  { color: '#2f9e9e', label: '1,4,7,10' },
+  { color: '#7aa93c', label: '2,5,8,11' },
+]
+
+const VB_W = 780
+const VB_H = 250
+
+const BOX_H = 30
+const ROW_Y = [70, 122, 174] // 三个陪集的行中心
+const OUT_Y = [52, 96, 140, 184] // 四个 k₂ 的行中心
+
+const aria =
+  'Cooley-Tukey 一层分解示意：12 个输入按三个陪集各做 4 点 DFT，逐项乘 12 次旋转因子，再按四个频率各做 3 点 DFT，得到 12 个输出'
+---
+
+<figure class={'df' + (compact ? ' is-compact' : '')} style={`--df-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    <defs>
+      <marker id="df-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--text-dim)" />
+      </marker>
+    </defs>
+
+    {/* 段 1：12 个输入，按陪集分三组 */}
+    {GROUPS.map((g, r) =>
+      [0, 1, 2, 3].map((i) => (
+        <circle cx={22 + i * 21} cy={ROW_Y[r]} r={6.5} fill={g.color} opacity="0.88" />
+      )),
+    )}
+    <text x={52} y={VB_H - 12} text-anchor="middle" font-size="11" fill="var(--text-soft)">
+      12 个输入
+    </text>
+
+    {/* 箭头 1 */}
+    <line
+      x1="108" y1="122" x2="134" y2="122"
+      stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#df-arrow)"
+    />
+
+    {/* 段 2：内层 —— 每个陪集一次 4 点 DFT */}
+    {GROUPS.map((g, r) => (
+      <g>
+        <rect
+          x="140" y={ROW_Y[r] - BOX_H / 2} width="104" height={BOX_H} rx="7"
+          fill="var(--bg-soft)" stroke={g.color} stroke-width="1.6"
+        />
+        <text
+          x="192" y={ROW_Y[r]} text-anchor="middle" dominant-baseline="central"
+          font-size="12" fill="var(--text)"
+        >
+          4 点 DFT
+        </text>
+      </g>
+    ))}
+    <text x="192" y={VB_H - 12} text-anchor="middle" font-size="11" fill="var(--text-soft)">
+      子群侧 · 每个陪集一次
+    </text>
+
+    {/* 箭头 2 */}
+    <line
+      x1="250" y1="122" x2="276" y2="122"
+      stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#df-arrow)"
+    />
+
+    {/* 段 3：逐项乘旋转因子 */}
+    <rect
+      x="282" y="44" width="112" height="156" rx="7"
+      fill="none" stroke="var(--text-dim)" stroke-width="1.3" stroke-dasharray="5 4"
+    />
+    <text x="338" y="116" text-anchor="middle" font-size="13" fill="#0e9488">
+      × ω
+      <tspan font-size="9" dy="-5">j₁k₂</tspan>
+    </text>
+    <text x="338" y="140" text-anchor="middle" font-size="11" fill="var(--text-dim)">
+      12 次
+    </text>
+    <text x="338" y={VB_H - 12} text-anchor="middle" font-size="11" fill="var(--text-soft)">
+      两层之间唯一的耦合
+    </text>
+
+    {/* 箭头 3 */}
+    <line
+      x1="400" y1="122" x2="426" y2="122"
+      stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#df-arrow)"
+    />
+
+    {/* 段 4：外层 —— 每个频率一次 3 点 DFT */}
+    {OUT_Y.map((y) => (
+      <g>
+        <rect
+          x="432" y={y - BOX_H / 2} width="104" height={BOX_H} rx="7"
+          fill="var(--bg-soft)" stroke="var(--text-dim)" stroke-width="1.4"
+        />
+        <text
+          x="484" y={y} text-anchor="middle" dominant-baseline="central"
+          font-size="12" fill="var(--text)"
+        >
+          3 点 DFT
+        </text>
+      </g>
+    ))}
+    <text x="484" y={VB_H - 12} text-anchor="middle" font-size="11" fill="var(--text-soft)">
+      商群侧 · 每个频率一次
+    </text>
+
+    {/* 箭头 4 */}
+    <line
+      x1="542" y1="122" x2="572" y2="122"
+      stroke="var(--text-dim)" stroke-width="1.4" marker-end="url(#df-arrow)"
+    />
+
+    {/* 段 5：输出 */}
+    <text x="584" y="116" font-size="13" fill="var(--text)">
+      X(0), …, X(11)
+    </text>
+    <text x="584" y="140" font-size="11" fill="var(--text-dim)">
+      12 个输出
+    </text>
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .df {
+    margin: 1.6rem 0;
+  }
+  .df.is-compact {
+    margin: 0;
+  }
+  .df svg {
+    width: 100%;
+    max-width: var(--df-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .df figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

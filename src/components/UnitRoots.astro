@@ -1,0 +1,178 @@
+---
+/**
+ * UnitRoots —— n 次单位根均匀铺在单位圆上，纯静态 SVG。
+ *
+ * DFT 的两处解释共用这张图：它是 C[G] 的 n 个特征标的取值表（第一节），
+ * 也是 x^n − 1 的 n 个一次因子对应的求值点（第二节）。
+ *
+ * 配色约定同 SchreierGraph：结构色走主题变量，身份色固定调色板。
+ */
+interface Props {
+  /** 单位根个数，默认 12（对应文中的 Z/12） */
+  n?: number
+  /** svg 最大宽度 px */
+  size?: number
+  caption?: string
+  /** 紧凑模式：去外边距与图注 */
+  compact?: boolean
+}
+
+const { n = 12, size = 380, caption, compact = false } = Astro.props
+
+const VB = 400
+const C = VB / 2
+const R = 134
+/** 起点 ω⁰ 的身份色（与正文里的强调色一致） */
+const P0_COLOR = '#d97706'
+
+const at = (i: number) => {
+  const a = (2 * Math.PI * i) / n
+  return { x: C + R * Math.cos(a), y: C - R * Math.sin(a) }
+}
+const pts = Array.from({ length: n }, (_, i) => ({ i, ...at(i) }))
+const half = n % 2 === 0 ? n / 2 : -1
+/** 相邻两点的夹角弧：从 ω⁰ 转到 ω¹ */
+const arcR = 46
+const arcEnd = at(1)
+
+const sup = '⁰¹²³⁴⁵⁶⁷⁸⁹'
+const supNum = (k: number) =>
+  String(k)
+    .split('')
+    .map((d) => sup[Number(d)])
+    .join('')
+
+const aria = `单位圆上均匀分布的 ${n} 个 ${n} 次单位根，ω^0 = 1 在正实轴上，相邻两点相差 2π/${n}`
+---
+
+<figure class={'ur' + (compact ? ' is-compact' : '')} style={`--ur-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB} ${VB}`} role="img" aria-label={aria}>
+    {/* 单位圆 */}
+    <circle
+      cx={C}
+      cy={C}
+      r={R}
+      fill="none"
+      stroke="var(--text-dim)"
+      stroke-width="1.2"
+      stroke-dasharray="4 5"
+      opacity="0.55"
+    />
+    {/* 坐标轴（只画到圆外一点） */}
+    <line
+      x1={C - R - 26}
+      y1={C}
+      x2={C + R + 26}
+      y2={C}
+      stroke="var(--text-dim)"
+      stroke-width="1"
+      opacity="0.35"
+    />
+    <line
+      x1={C}
+      y1={C - R - 26}
+      x2={C}
+      y2={C + R + 26}
+      stroke="var(--text-dim)"
+      stroke-width="1"
+      opacity="0.35"
+    />
+
+    {/* 圆心到各根的半径线 */}
+    {pts.map(({ i, x, y }) => (
+      <line
+        x1={C}
+        y1={C}
+        x2={x}
+        y2={y}
+        stroke={i === 0 ? P0_COLOR : 'var(--text-dim)'}
+        stroke-width={i === 0 ? 1.8 : 1}
+        opacity={i === 0 ? 0.9 : 0.3}
+      />
+    ))}
+
+    {/* 相邻根之间的夹角弧 */}
+    <path
+      d={`M ${C + arcR} ${C} A ${arcR} ${arcR} 0 0 0 ${C + arcR * Math.cos((2 * Math.PI) / n)} ${
+        C - arcR * Math.sin((2 * Math.PI) / n)
+      }`}
+      fill="none"
+      stroke="var(--text-dim)"
+      stroke-width="1.2"
+      opacity="0.7"
+    />
+    <text
+      x={C + arcR + 8}
+      y={C - arcR * 0.42}
+      font-size="10.5"
+      fill="var(--text-dim)"
+      dominant-baseline="central"
+    >
+      2π/{n}
+    </text>
+
+    {/* 各根 */}
+    {pts.map(({ i, x, y }) => (
+      <circle
+        cx={x}
+        cy={y}
+        r={i === 0 ? 5.4 : 3.4}
+        fill={i === 0 ? P0_COLOR : 'var(--text)'}
+      />
+    ))}
+
+    {/* ω⁰ 的标注 */}
+    <text
+      x={C + R + 12}
+      y={C}
+      font-size="13"
+      font-weight="600"
+      fill={P0_COLOR}
+      dominant-baseline="central"
+    >
+      ω{supNum(0)} = 1
+    </text>
+
+    {/* 若 n 为偶数，标出对面的 ω^(n/2) = −1 */}
+    {half > 0 && (
+      <text
+        x={C - R - 10}
+        y={C}
+        font-size="12"
+        fill="var(--text-dim)"
+        text-anchor="end"
+        dominant-baseline="central"
+      >
+        ω{supNum(half)} = −1
+      </text>
+    )}
+
+    {/* 计数提示 */}
+    <text x={C} y={VB - 12} font-size="11" fill="var(--text-soft)" text-anchor="middle">
+      {`共 ${n} 个：ω⁰, ω¹, …, ω${supNum(n - 1)}`}
+    </text>
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .ur {
+    margin: 1.6rem 0;
+  }
+  .ur.is-compact {
+    margin: 0;
+  }
+  .ur svg {
+    width: 100%;
+    max-width: var(--ur-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .ur figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
