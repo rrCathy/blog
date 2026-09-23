@@ -1,0 +1,94 @@
+---
+/**
+ * NauruGraph —— 广义 Petersen 图 GP(12,5)。
+ *
+ * S₄ 星形对换凯莱图与它同构（本文脚本跑过图同构检验）。
+ * 外圈 12 个顶点连成十二边形，内圈 12 个顶点每次跳 5 格连成星形，
+ * 内外一一用辐条相接。
+ */
+interface Props {
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { size = 420, caption, compact = false } = Astro.props
+
+const VB = 420
+const C = VB / 2
+const R_OUT = 178
+const R_IN = 92
+const P = 12
+const STEP = 5
+
+const at = (r: number, i: number) => {
+  const a = -Math.PI / 2 + (2 * Math.PI * i) / P
+  return { x: C + r * Math.cos(a), y: C + r * Math.sin(a) }
+}
+const outer = Array.from({ length: P }, (_, i) => ({ i, ...at(R_OUT, i) }))
+const inner = Array.from({ length: P }, (_, i) => ({ i, ...at(R_IN, i) }))
+
+const aria =
+  'Nauru 图 GP(12,5)：外圈十二边形，内圈每次跳五格的十二芒星，内外用辐条一一相连，共 24 个顶点、36 条边'
+---
+
+<figure class={'ng' + (compact ? ' is-compact' : '')} style={`--ng-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB} ${VB}`} role="img" aria-label={aria}>
+    {/* 外圈十二边形 */}
+    {outer.map((p) => {
+      const q = outer[(p.i + 1) % P]
+      return <line x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="var(--text-dim)" stroke-width="1.8" />
+    })}
+    {/* 内圈星形：每次跳 5 格 */}
+    {inner.map((p) => {
+      const q = inner[(p.i + STEP) % P]
+      return (
+        <line
+          x1={p.x}
+          y1={p.y}
+          x2={q.x}
+          y2={q.y}
+          stroke="#d97706"
+          stroke-width="1.8"
+          opacity="0.85"
+        />
+      )
+    })}
+    {/* 辐条 */}
+    {outer.map((p) => (
+      <line x1={p.x} y1={p.y} x2={inner[p.i].x} y2={inner[p.i].y} stroke="var(--text-dim)" stroke-width="1.2" opacity="0.7" />
+    ))}
+    {outer.map((p) => (
+      <circle cx={p.x} cy={p.y} r="5" fill="var(--text)" />
+    ))}
+    {inner.map((p) => (
+      <circle cx={p.x} cy={p.y} r="4.4" fill="#d97706" />
+    ))}
+    <text x={C} y={VB - 8} font-size="12" fill="var(--text-dim)" text-anchor="middle">
+      外圈十二边形 · 内圈跳 5 格 · 12 条辐条
+    </text>
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .ng {
+    margin: 1.6rem 0;
+  }
+  .ng.is-compact {
+    margin: 0;
+  }
+  .ng svg {
+    width: 100%;
+    max-width: var(--ng-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .ng figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

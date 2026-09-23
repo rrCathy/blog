@@ -1,0 +1,133 @@
+---
+/**
+ * StarLayers —— S₄ 星图的字长分层图。
+ *
+ * 从恒等元出发，每乘一个星形对换 (12)/(13)/(14) 走一步，24 个元素按最短步数
+ * 分成四层。层内元素按角度均匀摆在同心圆上。
+ *
+ * 数据来自实跑（BFS 分层）：1 / 3 / 6 / 9 / 5。最外层里三个双对换都含 1，
+ * 只有两个三轮换完全不碰枢纽，用强调色单独标出。
+ */
+interface Props {
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { size = 470, caption, compact = false } = Astro.props
+
+const VB = 400
+const C = VB / 2
+/** 各层的半径：距离 1 / 2 / 3 / 4 */
+const RAD = { 1: 54, 2: 92, 3: 128, 4: 166 }
+
+type Shell = { r: number; els: string[]; named?: string[] }
+/** named 列出要写名字的元素；其余只落点，名字交给正文说明，免得窄屏糊成一团 */
+const SHELLS: Shell[] = [
+  { r: 1, els: ['(12)', '(13)', '(14)'], named: ['(12)', '(13)', '(14)'] },
+  { r: 2, els: ['(123)', '(132)', '(124)', '(142)', '(134)', '(143)'] },
+  { r: 3, els: ['(23)', '(24)', '(34)', '(1234)', '(1243)', '(1324)', '(1342)', '(1423)', '(1432)'] },
+  { r: 4, els: ['(12)(34)', '(13)(24)', '(14)(23)', '(234)', '(243)'] },
+]
+
+/** 强调色：全文用它标"完全不动 1"的两个元素 */
+const FAR = '#d97706'
+const FAR_ELS = ['(234)', '(243)']
+
+const at = (r: number, i: number, n: number, offset = 0) => {
+  const a = -Math.PI / 2 + (2 * Math.PI * i) / n + offset
+  return { x: C + r * Math.cos(a), y: C + r * Math.sin(a) }
+}
+
+const aria =
+  'S₄ 星图的字长分层：恒等元在中心，距离 1 的三个对换、距离 2 的六个三轮换、距离 3 的九个元素、距离 4 的五个元素各占一个同心圆；最外层里 (234) 与 (243) 两个完全不碰 1。'
+---
+
+<figure class={'sl' + (compact ? ' is-compact' : '')} style={`--sl-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB} ${VB}`} role="img" aria-label={aria}>
+    {/* 分层同心圆 */}
+    {SHELLS.map((s) => (
+      <circle
+        cx={C}
+        cy={C}
+        r={RAD[s.r as 1 | 2 | 3 | 4]}
+        fill="none"
+        stroke="var(--text-dim)"
+        stroke-width="1"
+        stroke-dasharray="3 5"
+        opacity="0.35"
+      />
+    ))}
+
+    {/* 恒等元 */}
+    <circle cx={C} cy={C} r="8" fill="var(--text)" />
+    <text x={C} y={C - 18} font-size="15" font-weight="600" fill="var(--text)" text-anchor="middle">
+      e
+    </text>
+    {/* 最外圈标一下：橙色两个点在这一层 */}
+    <text x={C - 166 + 4} y={C - 122} font-size="11" fill="var(--text-soft, #999)" text-anchor="start">
+      距离 4
+    </text>
+
+    {/* 各层元素 */}
+    {SHELLS.map((s) => {
+      const n = s.els.length
+      const off = s.r === 2 || s.r === 3 ? Math.PI / n : -Math.PI / (2 * n)
+      return s.els.map((el, i) => {
+        const p = at(RAD[s.r as 1 | 2 | 3 | 4], i, n, off)
+        const farColor = FAR_ELS.includes(el)
+        const showName = (s.named ?? []).includes(el)
+        const lx = C + (p.x - C) * 1.16
+        const ly = C + (p.y - C) * 1.16
+        return (
+          <g>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={farColor ? 5.6 : 3.4}
+              fill={farColor ? FAR : 'var(--text)'}
+              opacity={farColor ? 1 : 0.75}
+            />
+            {showName && (
+              <text
+                x={lx}
+                y={ly}
+                font-size={farColor ? 14 : 12.5}
+                font-weight={farColor ? 600 : 400}
+                fill={farColor ? FAR : 'var(--text)'}
+                text-anchor={Math.abs(p.x - C) < 4 ? 'middle' : p.x > C ? 'start' : 'end'}
+                dominant-baseline="central"
+              >
+                {el}
+              </text>
+            )}
+          </g>
+        )
+      })
+    })}
+
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .sl {
+    margin: 1.6rem 0;
+  }
+  .sl.is-compact {
+    margin: 0;
+  }
+  .sl svg {
+    width: 100%;
+    max-width: var(--sl-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .sl figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

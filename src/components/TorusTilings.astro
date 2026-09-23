@@ -1,0 +1,297 @@
+---
+/**
+ * TorusTilings —— 环面上 24 点全六边形镶嵌的周期格分类（8 类）。
+ *
+ * 图怎么读：每格画一块「基本域」（平行四边形）与它内部 12 个三角格格点。
+ * 那 12 个点就是环面上 12 个六边形的面心——基本域内格点的排布方式，
+ * 就是这个镶嵌的"形状指纹"。
+ *
+ * 数据全部来自实跑脚本（.tmp-torus/verify4.py 与 verify6.py ：
+ * 枚举三角格的 28 个指数 12 子格 → Burnside 数 D6 轨道 → 8 类；
+ * 再用引擎导出的镶嵌数据做图同构检验，确认 S₄ 星图落在第 8 类）。
+ * 顶点对是该类周期格的一组最短基，用 60° 几何作图。
+ */
+interface Props {
+  /** svg 最大宽度 px */
+  size?: number
+  caption?: string
+  /** 紧凑模式：去外边距与图注 */
+  compact?: boolean
+  /** 只显示某一类（放大细节用），例如 only={8} 只看 S₄ 那一类 */
+  only?: number
+  /** only 模式下替换格子左上角的类名标签（正文在分类之前用它，避免提前引用类号） */
+  label?: string
+}
+
+const { size = 700, caption, compact = false, only, label } = Astro.props
+
+const SQ3 = Math.sqrt(3)
+/** (a, b) 坐标 → 平面点：a·u + b·v，u = (1,0)，v = (cos60°, sin60°) */
+const plane = (a: number, b: number) => ({ x: a + b / 2, y: (SQ3 / 2) * b })
+/** 态射的范数平方（60° 内积：|(a,b)|² = a² + b² + ab） */
+const nrm2 = (a: number, b: number) => a * a + b * b + a * b
+
+type Cls = {
+  id: number
+  v1: [number, number]
+  v2: [number, number]
+  /** D6 轨道大小（1 / 3 / 6） */
+  orbit: number
+  /** 周期格在 D6 里的稳定子阶 = 12 / orbit */
+  stab: number
+  /** 该格含三角格单位向量 ⇒ 商出来的图退化成 12 边形，不是三角剖分 */
+  degenerate: boolean
+  /** 是否是 S₄ 星形对换凯莱图的那一类 */
+  s4: boolean
+  /** 是否是第五节那张流传的矩形周期图所在的那一类 */
+  ref: boolean
+  /** 稳定子里的对称性描述 */
+  sym: string
+}
+
+/** 47 行脚本算出来的 8 类（顺序按轨道从大到小） */
+const CLASSES: Cls[] = [
+  { id: 1, v1: [3, 0], v2: [3, -4], orbit: 6, stab: 2, degenerate: false, s4: false, ref: false, sym: '180°' },
+  { id: 2, v1: [-2, 3], v2: [-4, 0], orbit: 6, stab: 2, degenerate: false, s4: false, ref: false, sym: '180°' },
+  { id: 3, v1: [1, 0], v2: [-6, 12], orbit: 3, stab: 4, degenerate: true, s4: false, ref: false, sym: '180°·镜像' },
+  { id: 4, v1: [2, 0], v2: [4, -6], orbit: 3, stab: 4, degenerate: false, s4: false, ref: false, sym: '180°·镜像' },
+  { id: 5, v1: [2, 0], v2: [-3, 6], orbit: 3, stab: 4, degenerate: false, s4: false, ref: false, sym: '180°·镜像' },
+  { id: 6, v1: [3, 0], v2: [-2, 4], orbit: 3, stab: 4, degenerate: false, s4: false, ref: false, sym: '180°·镜像' },
+  { id: 7, v1: [-1, 2], v2: [-6, 0], orbit: 3, stab: 4, degenerate: false, s4: false, ref: true, sym: '180°·镜像' },
+  { id: 8, v1: [2, 2], v2: [-2, 4], orbit: 1, stab: 12, degenerate: false, s4: true, ref: false, sym: '整个 12 阶' },
+]
+
+const VB_W = 168
+const VB_H = 132
+const PAD = 12
+
+type Panel = {
+  cls: Cls
+  /** 平行四边形四角 */
+  corner: { x: number; y: number }[]
+  /** 域内的 12 个格点（svg 坐标） */
+  inner: { x: number; y: number }[]
+  /** 域外的格点（svg 坐标，淡色） */
+  outer: { x: number; y: number }[]
+  /** 两个方向箭头的端点 */
+  a1: { x: number; y: number }
+  a2: { x: number; y: number }
+  l1: number
+  l2: number
+  angle: number
+}
+
+const panels: Panel[] = CLASSES.map((cls) => {
+  const [p, q] = cls.v1
+  const [r, s] = cls.v2
+  const det = p * s - q * r // > 0
+
+  // 平行四边形：0, v1, v1+v2, v2
+  const rawCorner = [
+    plane(0, 0),
+    plane(p, q),
+    plane(p + r, q + s),
+    plane(r, s),
+  ]
+
+  // 枚举三角格格点，二分：落在基本域内的 12 个 / 域外的
+  type P2 = { x: number; y: number; inside: boolean }
+  const all: P2[] = []
+  for (let i = -40; i <= 40; i++) {
+    for (let j = -40; j <= 40; j++) {
+      // 解 (i,j) = u·v1 + v·v2
+      const u = (i * s - j * r) / det
+      const v = (p * j - q * i) / det
+      const inside = u >= -1e-9 && u < 1 - 1e-9 && v >= -1e-9 && v < 1 - 1e-9
+      const pt = plane(i, j)
+      // 只留基本域附近的点（bounding box 稍放宽）
+      all.push({ x: pt.x, y: pt.y, inside })
+    }
+  }
+
+  const inner = all.filter((d) => d.inside)
+  // 域外点只保留在包围盒附近的
+  const spreadX = Math.max(...rawCorner.map((c) => Math.abs(c.x)), 1)
+  const spreadY = Math.max(...rawCorner.map((c) => Math.abs(c.y)), 1)
+  const outer = all.filter(
+    (d) =>
+      !d.inside &&
+      Math.abs(d.x) < spreadX * 1.12 + 0.6 &&
+      Math.abs(d.y) < spreadY * 1.12 + 0.6,
+  )
+
+  // 归一化到 viewBox
+  const xs = [...rawCorner, ...inner, ...outer].map((c) => c.x)
+  const ys = [...rawCorner, ...inner, ...outer].map((c) => c.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const bw = Math.max(maxX - minX, 1e-6)
+  const bh = Math.max(maxY - minY, 1e-6)
+  const k = Math.min((VB_W - 2 * PAD) / bw, (VB_H - 2 * PAD) / bh)
+  const ox = (VB_W - bw * k) / 2 - minX * k
+  const oy = (VB_H - bh * k) / 2 + maxY * k // y 翻转
+  const T = (c: { x: number; y: number }) => ({ x: ox + c.x * k, y: oy - c.y * k })
+
+  return {
+    cls,
+    corner: rawCorner.map(T),
+    inner: inner.map(T),
+    outer: outer.map(T),
+    a1: T(plane(p / 2, q / 2)),
+    a2: T(plane(r / 2, s / 2)),
+    l1: Math.sqrt(nrm2(p, q)),
+    l2: Math.sqrt(nrm2(r, s)),
+    angle: (Math.acos((p * r + q * s + (p * s + q * r) / 2) / Math.sqrt(nrm2(p, q) * nrm2(r, s))) * 180) / Math.PI,
+  }
+})
+
+const fmt = (x: number) => (Math.abs(x - Math.round(x)) < 1e-6 ? String(Math.round(x)) : x.toFixed(2))
+const d = (c: { x: number; y: number }[]) =>
+  `M ${c.map((pt) => `${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' L ')} Z`
+
+/** only 指定时只渲染那一类，供正文放大讲某一格用 */
+const shown = only ? panels.filter((pn) => pn.cls.id === only) : panels
+
+const aria =
+  '环面上 24 点全六边形镶嵌按周期格分成 8 类；每格画一块基本域与域内 12 个六边形面心。第 8 类是 S₄ 星图的镶嵌，基本域是 60 度等边菱形。'
+---
+
+<figure class={'tt' + (compact ? ' is-compact' : '')} style={`--tt-max:${size}px`}>
+  <div class={'tt-grid' + (only ? ' is-single' : '')}>
+    {
+      shown.map((pn) => (
+        <div class={'tt-cell' + (pn.cls.s4 ? ' is-s4' : '') + (pn.cls.degenerate ? ' is-deg' : '') + (pn.cls.ref ? ' is-ref' : '')}>
+          <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+            {/* 域外格点：只作底噪，说明外面还是同一套三角格 */}
+            {pn.outer.map((c) => (
+              <circle cx={c.x} cy={c.y} r="0.9" fill="var(--text-dim)" opacity="0.3" />
+            ))}
+            {/* 基本域 */}
+            <path
+              d={d(pn.corner)}
+              fill={pn.cls.s4 ? 'rgba(217,119,6,0.12)' : 'var(--bg-soft)'}
+              stroke={pn.cls.s4 ? '#d97706' : 'var(--text-dim)'}
+              stroke-width={pn.cls.s4 ? 1.7 : 1.1}
+              opacity={pn.cls.s4 ? 1 : 0.75}
+            />
+            {/* 域内的 12 个面心 */}
+            {pn.inner.map((c) => (
+              <circle
+                cx={c.x}
+                cy={c.y}
+                r={pn.cls.s4 ? 2.9 : 2.4}
+                fill={pn.cls.s4 ? '#d97706' : 'var(--text)'}
+              />
+            ))}
+            {/* 两个周期方向 */}
+            <line
+              x1={pn.corner[0].x}
+              y1={pn.corner[0].y}
+              x2={pn.a1.x}
+              y2={pn.a1.y}
+              stroke={pn.cls.s4 ? '#d97706' : 'var(--text-dim)'}
+              stroke-width="1.3"
+              opacity="0.75"
+            />
+            <line
+              x1={pn.corner[0].x}
+              y1={pn.corner[0].y}
+              x2={pn.a2.x}
+              y2={pn.a2.y}
+              stroke={pn.cls.s4 ? '#d97706' : 'var(--text-dim)'}
+              stroke-width="1.3"
+              opacity="0.75"
+            />
+            <text x="6" y="12" font-size="10" fill={pn.cls.s4 ? '#d97706' : 'var(--text-dim)'} font-weight="600">
+              {only && label ? label : pn.cls.s4 ? '第 8 类 · S₄' : `第 ${pn.cls.id} 类`}
+            </text>
+          </svg>
+          <div class="tt-meta">
+            <span class="tt-len">
+              {fmt(pn.l1)} : {fmt(pn.l2)}
+            </span>
+            <span class="tt-sub">
+              {Math.round(pn.angle)}° · 对称 {pn.cls.sym}
+            </span>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .tt {
+    margin: 1.6rem 0;
+  }
+  .tt.is-compact {
+    margin: 0;
+  }
+  .tt-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    max-width: var(--tt-max);
+    margin: 0 auto;
+  }
+  .tt-grid.is-single .tt-cell {
+    flex: 0 1 380px;
+    max-width: 420px;
+  }
+  .tt-cell {
+    flex: 1 1 130px;
+    min-width: 0;
+    max-width: 176px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px 4px 4px;
+    background: var(--bg-soft);
+  }
+  .tt-cell.is-s4 {
+    border-color: #d97706;
+    border-width: 1.5px;
+    background: transparent;
+  }
+  .tt-cell.is-deg {
+    opacity: 0.62;
+  }
+  .tt-cell.is-ref {
+    border-style: dashed;
+    border-color: var(--text-dim);
+  }
+  .tt-cell svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .tt-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    margin-top: 1px;
+    line-height: 1.35;
+  }
+  .tt-len {
+    font-size: 0.72rem;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .tt-sub {
+    font-size: 0.66rem;
+    color: var(--text-dim);
+  }
+  .tt.is-compact .tt-meta {
+    display: none;
+  }
+  .tt figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
