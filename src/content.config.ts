@@ -85,6 +85,16 @@ const blog = defineCollection({
      * 构建期会校验，不一致直接报错（否则同一系列会裂成两个页面）。
      */
     seriesSlug: z.string().optional(),
+    /**
+     * 前置知识：读者读这篇之前需要先掌握的概念（3–6 条短名词，如 '凯莱图'）。
+     * 展示在文章头部信息卡里；缺省不显示该行（只留阅读时长）。
+     */
+    prereq: z.array(z.string()).default([]),
+    /**
+     * 预计阅读分钟数。缺省按正文自动估算（见 src/lib/reading.ts），
+     * 只有自动值明显离谱时才手写覆盖（如大量图表、长推导）。
+     */
+    readingTime: z.number().optional(),
     /** true = 草稿，不进列表与 RSS */
     draft: z.boolean().default(false),
     /** 封面/头图（首页横卡右侧 + 详情页 hero），见 coverSchema 注释 */

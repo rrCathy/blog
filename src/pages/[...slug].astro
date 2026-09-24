@@ -4,9 +4,11 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import BaseLayout from '../layouts/BaseLayout.astro'
 import PostCover from '../components/PostCover.astro'
+import PrereqCard from '../components/PrereqCard.astro'
 import ShareBar from '../components/ShareBar.tsx'
 import { tagTone } from '../lib/tag-tone'
 import { getSeriesOf } from '../lib/series'
+import { estimateReading } from '../lib/reading'
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog')
@@ -19,6 +21,9 @@ export async function getStaticPaths() {
 const { post } = Astro.props
 const { Content, headings } = await render(post)
 const base = import.meta.env.BASE_URL
+
+// 阅读时长：构建期按正文估算（src/lib/reading.ts），frontmatter 手写值优先
+const minutes = post.data.readingTime ?? estimateReading(post.body ?? '').minutes
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -106,6 +111,8 @@ const shareImgUrl =
         <h1>{post.data.title}</h1>
       </header>
     )}
+
+    <PrereqCard prereq={post.data.prereq} minutes={minutes} />
 
     {toc.length > 3 && (
       <nav class="toc" aria-label="文章目录">
@@ -236,6 +243,47 @@ const shareImgUrl =
   </article>
 
   <script>
+    // 数学公式复制：KaTeX 为兼顾无障碍会同时输出 MathML 层与视觉层，直接 Ctrl+C
+    // 会把 MathML 按 token 拆成一字符一行（diam / = / ⌊ / 3 / ( …），粘出来没法用。
+    // 拦截 copy：把选区内的公式换成它的 TeX 源码——行内 $…$、块级 $$…$$，
+    // 源码取自 KaTeX 自带的 <annotation encoding="application/x-tex">。
+    document.addEventListener('copy', (ev) => {
+      const sel = document.getSelection()
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
+      const frag = sel.getRangeAt(0).cloneContents()
+      // 选区里没有公式就完全不插手，交回浏览器默认行为
+      if (!frag.querySelector('.katex-mathml, .katex-html')) return
+      if (!ev.clipboardData) return
+
+      const texOf = (el: Element) =>
+        el.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? ''
+      // 块级判据用 MathML 层的 display="block"：只选中公式内部时，
+      // 外层 .katex-display 根本不在选区里，靠它才分得清行内还是块级
+      const asTex = (el: Element) =>
+        el.querySelector('math[display="block"]')
+          ? `\n$$${texOf(el)}$$\n`
+          : `$${texOf(el)}$`
+
+      // 块级公式先换（它内部的 .katex 会一并消失），独立成行方便粘回去
+      frag.querySelectorAll('.katex-display').forEach((el) => {
+        el.replaceWith(document.createTextNode(asTex(el)))
+      })
+      // 行内公式，以及只选中块级公式内部的情况
+      frag.querySelectorAll('.katex').forEach((el) => {
+        el.replaceWith(document.createTextNode(asTex(el)))
+      })
+      // 再碎一层：只选到 MathML 这一层，TeX 源码仍在，照样换出来
+      frag.querySelectorAll('.katex-mathml').forEach((el) => {
+        if (texOf(el)) el.replaceWith(document.createTextNode(asTex(el)))
+        else el.remove()
+      })
+      // 剩下的视觉层残片直接删，别让它复制成一堆乱码
+      frag.querySelectorAll('.katex-html').forEach((el) => el.remove())
+
+      ev.clipboardData.setData('text/plain', frag.textContent ?? '')
+      ev.preventDefault()
+    })
+
     // 代码块复制按钮:把每个 pre 包进 .pre-wrap,右上角挂按钮
     document.querySelectorAll<HTMLElement>('.article-body pre').forEach((pre) => {
       const wrap = document.createElement('div')

@@ -543,6 +543,67 @@ html[data-theme='dark'] img.only-light {
 .article-header .post-meta {
   font-size: 0.92rem;
 }
+/* 标题与信息卡贴紧一点:卡片的呼吸留给它自己和正文之间 */
+.article-header:has(+ .prereq-card) {
+  margin-bottom: 1.2rem;
+}
+/* 文章头部信息卡:前置知识 + 预计阅读时长 */
+.prereq-card {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 2.2rem;
+  padding: 0.95rem 1.15rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+.prereq-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: baseline;
+}
+.prereq-label {
+  flex: none;
+  width: 4rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+.prereq-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.4rem;
+}
+.prereq-chip {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+.prereq-value {
+  color: var(--text-soft);
+}
+.prereq-value b {
+  color: var(--text);
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .prereq-row {
+    gap: 0.55rem;
+  }
+  .prereq-label {
+    width: 3.3rem;
+    font-size: 0.72rem;
+  }
+  .prereq-chip {
+    font-size: 0.78rem;
+  }
+}
 .article-body {
   font-size: 1.02rem;
 }

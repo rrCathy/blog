@@ -1,0 +1,36 @@
+---
+/**
+ * PrereqCard — 文章头部信息卡：前置知识 + 预计阅读时长。
+ *
+ * 前置知识来自 frontmatter 的 prereq（读者读这篇之前需要先掌握的概念），
+ * 为空时只显示阅读时长，卡片本身仍然保留——时长是每篇都有的信息。
+ * 放在 h1 之后、目录之前；样式见 global.css 的 .prereq-* 系列。
+ */
+interface Props {
+  /** 前置知识点（短名词，3–6 条） */
+  prereq?: string[]
+  /** 预计阅读分钟数（构建期估算，或 frontmatter 手写覆盖） */
+  minutes: number
+}
+
+const { prereq = [], minutes } = Astro.props
+---
+
+<aside class="prereq-card" aria-label="阅读提示">
+  {prereq.length > 0 && (
+    <div class="prereq-row">
+      <span class="prereq-label">前置知识</span>
+      <span class="prereq-chips">
+        {prereq.map((p) => (
+          <span class="prereq-chip">{p}</span>
+        ))}
+      </span>
+    </div>
+  )}
+  <div class="prereq-row">
+    <span class="prereq-label">预计阅读</span>
+    <span class="prereq-value">
+      约 <b>{minutes}</b> 分钟
+    </span>
+  </div>
+</aside>
