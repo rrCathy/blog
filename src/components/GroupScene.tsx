@@ -44,6 +44,7 @@ import type {
   Layout3D,
   CayleyActionParam,
   CayleyShape2D,
+  CayleyForceParams,
   GroupActionComputation,
 } from '@groupviz/core'
 import { LAYOUTS_3D, CAYLEY_SHAPES_2D } from '@groupviz/core'
@@ -135,6 +136,14 @@ export interface GroupSceneProps {
    * A₄ 的 'rewiring'（半直积重布线形态）；写错的名字自动退回缺省形状。
    */
   shape?: string
+
+  /**
+   * 2D 凯莱图开启动态力导向：在选定形状之上跑力学模拟，节点可拖动。
+   * 拖开一个点松手，整图重新找平衡；群阶大、边密时换几个平衡位置还是一团。
+   */
+  forceDirected?: boolean
+  /** 力导向微调（forceDirected 为 true 时生效），透传引擎 CayleyForceParams */
+  force?: CayleyForceParams
 
   // ── 群作用视图专属（view: 'action'）──
   /**
@@ -352,6 +361,8 @@ export default function GroupScene({
   pathShowOrder,
   edgeCurvature,
   shape,
+  forceDirected = false,
+  force,
   nodeRadius,
   actionKind = 'conjugation',
   subsets,
@@ -812,6 +823,7 @@ export default function GroupScene({
             )}
             {view === 'cayley' && (
               <CayleyView
+                key={forceDirected ? `cayley-fd-${Math.round(vbWidth)}` : undefined}
                 group={group}
                 {...sceneProps}
                 showLabels={sceneShowLabels}
@@ -821,6 +833,8 @@ export default function GroupScene({
                 edgeCurvature={edgeCurvature}
                 shape2D={shapeProp}
                 pathHighlight={pathHighlight}
+                forceDirected={forceDirected}
+                force={force}
               />
             )}
             {view === 'table' && (
