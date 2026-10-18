@@ -31,6 +31,7 @@ import {
   buildSubgroupGroup,
   resolveElement as resolveEl,
   elementOrder as orderOf,
+  getSymmetryType,
   wordLengthSphereActions,
   buildActionComputation,
   COLOR_PALETTE,
@@ -181,6 +182,26 @@ export interface GroupSceneProps {
   showFigureTitle?: boolean
   /** 演示自动循环重播(默认 false)。读者也可用操作台上的 ▶/⏸ 现场开关 */
   autoDemo?: boolean
+  /**
+   * 2T 专属（仅 binaryTetrahedron 群如 SL(2,3) 生效）：显示皮带控制行——
+   * 累计扭转 τ 读数 + 「720° 复原」演练按钮（累计满两整扭才点亮）。
+   * 点操作台里的元素看四面体旋转、皮带随之扭转；τ 就是这段旅程在 SU(2) 里的记忆。
+   */
+  beltDemo?: boolean
+  /**
+   * 对称性视图：叠加（compose）模式——目标姿态 = 元素旋转左乘当前姿态，
+   * 从当前姿态直接 slerp，不先回恒等。皮带随之**累计**扭转（τ 跨点击累加），
+   * 适合讲「旅程」；缺省 false = 每次演示从恒等出发（适合讲单个元素）。
+   */
+  compose?: boolean
+  /**
+   * 对称性视图：挂载时是否自动播放兜底元素的演示（默认 true）。
+   * 传 false = 静照开局，读者点操作台chip 才开始演——配 compose 讲皮带累积时用
+   * （否则挂载动画会先把 τ 用掉一截）。
+   */
+  playOnMount?: boolean
+  /** 2T 专属：轨道目标点。'solid' = 几何体中心(缺省)；'beltAnchor' = 皮带固定端 */
+  centerOn?: 'solid' | 'beltAnchor'
   /** 底部右侧操作提示；缺省按 view 给默认文案 */
   hint?: string
 }
@@ -252,6 +273,12 @@ function orderTitle(order: number, symbol: string, includeAngle: boolean): strin
     : ''
   if (s === 'a4' && order === 3) return '3 次轴 · 3-循环' + angle
   if (s === 'a4' && order === 2) return '2 次轴 · 双对换' + angle
+  if (s === 'sl(2,3)') {
+    if (order === 6) return '6 阶 · 转 120°'
+    if (order === 4) return '4 阶 · 转 180°'
+    if (order === 3) return '3 阶 · 转 240°'
+    if (order === 2) return '中心 −I · 360°'
+  }
   return `阶 ${order}` + angle
 }
 
@@ -262,8 +289,42 @@ function describeElement(el: GroupElement, groupSymbol: string, order: number): 
     if (order === 3) return '3-循环：绕顶点轴转 120°——黄球顶点不动，其余三色轮换'
     if (order === 2) return '双对换：绕相对棱轴转 180°——红轴穿过两个青球'
   }
+  if (s === 'sl(2,3)') {
+    // 二元四面体群：旋转角 2ψ，皮带累计扭转 τ += 2ψ。cos ψ = 1/2→120°(6 阶)、
+    // cos ψ = 0→180°(4 阶)、cos ψ = −1/2→240°(3 阶)、−I→360°(中心，几何体不动)。
+    if (order === 6) return '6 阶元：绕顶点—对面轴转 120°，皮带 +120°'
+    if (order === 4) return '4 阶元：绕对棱轴转 180°，皮带 +180°'
+    if (order === 3) return '3 阶元：绕顶点轴转 240°，皮带 +240°'
+    if (order === 2) return '中心元 −I：四面体一动不动，皮带多一整圈 360°'
+  }
   if (order > 1) return `阶 ${order} 元素：绕几何体的对称轴旋转`
   return '恒等：什么都不做'
+}
+
+/**
+ * 矩阵群（SL(2,3) 等）的元素 label 是 LaTeX smallmatrix 串，按钮里直接显示很难看。
+ * 这里解析成 2×2 小表格；非矩阵 label 原样显示。
+ */
+function ElementLabel({ label }: { label: string }) {
+  const m = label.match(/^\\begin\{smallmatrix\}([\s\S]*?)\\end\{smallmatrix\}$/)
+  if (!m) return <>{label}</>
+  const rows = m[1]
+    .split('\\\\')
+    .map(r => r.split('&').map(c => c.trim()))
+    .filter(r => r.length > 0 && r.some(c => c !== ''))
+  if (rows.length === 0) return <>{label}</>
+  const cols = Math.max(...rows.map(r => r.length))
+  return (
+    <span className="gv-matrix" style={{ gridTemplateColumns: `repeat(${cols}, auto)` }}>
+      {rows.flatMap((cells, ri) =>
+        cells.map((c, ci) => (
+          <span key={`${ri}-${ci}`} className="gv-matrix-cell">
+            {c}
+          </span>
+        )),
+      )}
+    </span>
+  )
 }
 
 export default function GroupScene({
@@ -303,6 +364,10 @@ export default function GroupScene({
   rotateSpeed,
   showFigureTitle,
   autoDemo = false,
+  beltDemo = false,
+  compose = false,
+  playOnMount = true,
+  centerOn,
   hint,
 }: GroupSceneProps) {
   const [resolvedDark, setResolvedDark] = useState(false)
@@ -311,6 +376,11 @@ export default function GroupScene({
   const [pickedId, setPickedId] = useState<string | null>(null)
   const [autoOn, setAutoOn] = useState(autoDemo)
   const [replayTick, setReplayTick] = useState(0)
+
+  // 2T 皮带状态：τ 为引擎上报的累计扭转（弧度，跨元素累加 = 旅程的 SU(2) 记忆）；
+  // beltRestoreTick 自增即触发一次 720° 复原演练（引擎要求累计 ≥ 4π 才生效）。
+  const [beltTau, setBeltTau] = useState(0)
+  const [beltRestoreTick, setBeltRestoreTick] = useState(0)
 
   // 跟随页面主题(html data-theme / prefers-color-scheme)
   useEffect(() => {
@@ -452,11 +522,21 @@ export default function GroupScene({
 
   // 作用的元素：接受 label / id / 循环记号，解析成引擎要的元素 id。
   // 未命中项丢弃（交给引擎用自己的生成元兜底）；actions 缺省则不传，行为与从前一致。
+  // 逗号分隔有个坑：直积群的元素 id 自带逗号（A4×C2 的 '2,3,1,4|e0'），
+  // 直接 split(',') 会切碎。改为贪心合并——从当前位置不断吞入片段直到能解析。
   const actionParams = useMemo(() => {
     if (!group) return undefined
     if (isWordLengthSphere) return sphereActions ?? undefined
     if (!actions) return undefined
-    const refs = actions.split(',').map(s => s.trim()).filter(Boolean)
+    const refs: string[] = []
+    let buf = ''
+    for (const part of actions.split(',')) {
+      buf = buf ? buf + ',' + part : part.trim()
+      if (buf && resolveEl(group, buf)) {
+        refs.push(buf)
+        buf = ''
+      }
+    }
     const params = refs
       .map((ref, i): CayleyActionParam | null => {
         const el = resolveEl(group, ref)
@@ -539,6 +619,11 @@ export default function GroupScene({
   const isIdentityEl = (el: GroupElement | null) =>
     !!el && !!group && el.id === group.identity.id
 
+  // 2T 皮带行：仅对称性视图 + binaryTetrahedron 群（SL(2,3)）+ beltDemo 开启
+  const is2T = view === 'symmetry' && !!group && getSymmetryType(group) === 'binaryTetrahedron'
+  const beltTurns = Math.floor(beltTau / (2 * Math.PI) + 1e-9)
+  const beltReady = beltTau >= 4 * Math.PI - 1e-6
+
   // 当前演示元素(操作台优先，其次 props.actionElement，最后自动兜底)
   const activeEl = useMemo<GroupElement | null>(() => {
     if (!group) return null
@@ -556,10 +641,20 @@ export default function GroupScene({
   }, [group, picker, pickedId, actionElement])
 
   const activeId = activeEl?.id ?? null
+  // playOnMount=false 时，未点 chip 且未指定 actionElement 就不演（静照开局）；
+  // 显式 actionElement 仍然 honored。
   const symShowAction =
     showAction ??
-    (picker ? (activeEl ? !isIdentityEl(activeEl) : false) : actionElement != null || activeEl != null)
+    (playOnMount === false && pickedId == null && actionElement == null
+      ? false
+      : picker
+        ? activeEl
+          ? !isIdentityEl(activeEl)
+          : false
+        : actionElement != null || activeEl != null)
   const symActionElementId = symShowAction ? (isIdentityEl(activeEl) ? null : activeId) : null
+  // 不演的时候操作台不该有 chip 显得"已选中"（activeEl 此时只是兜底值）
+  const pickerActiveEl = symShowAction ? activeEl : null
 
   // 操作台：按阶分组
   const pickerGroups = useMemo(() => {
@@ -608,11 +703,13 @@ export default function GroupScene({
   const activeHint =
     hint ??
     hoverHint ??
-    (isSymDemo && activeEl && group
-      ? describeElement(activeEl, group.symbol, orderOf(group, activeEl))
-      : isWordLengthSphere
-        ? '拖动旋转 · 滚轮缩放 · 同色同字长（相邻对换下的最短生成元个数）'
-        : DEFAULT_HINT[view])
+    (is2T && beltDemo
+      ? '点元素看旋转 · 皮带同步扭转 · 累计 720° 后可播放复原演练'
+      : isSymDemo && activeEl && group
+        ? describeElement(activeEl, group.symbol, orderOf(group, activeEl))
+        : isWordLengthSphere
+          ? '拖动旋转 · 滚轮缩放 · 同色同字长（相邻对换下的最短生成元个数）'
+          : DEFAULT_HINT[view])
   // 容器级主题：总是显式标注。引擎的 ActionScene / 操作台等读写 CSS 变量
   // （--bg-canvas 等），只认 [data-theme]；页面若无 html[data-theme]（如独立
   // 测试页），不标注就会回落到 theme.css 的深色默认值。
@@ -627,7 +724,7 @@ export default function GroupScene({
               <span key={grp.order} className="gv-sym-group">
                 <span className="gv-sym-gtitle">{grp.title}</span>
                 {grp.els.map(el => {
-                  const isActive = activeEl?.id === el.id
+                  const isActive = pickerActiveEl?.id === el.id
                   return (
                     <button
                       key={el.id}
@@ -637,7 +734,7 @@ export default function GroupScene({
                       onClick={() => handlePick(el.id)}
                       title={describeElement(el, group.symbol, orderOf(group, el))}
                     >
-                      {el.label}
+                      <ElementLabel label={el.label} />
                     </button>
                   )
                 })}
@@ -664,6 +761,31 @@ export default function GroupScene({
               {autoOn ? '⏸ 暂停循环' : '▶ 自动循环'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 2T 皮带控制行：τ 读数 + 720° 复原演练（引擎要求累计 ≥ 4π 才生效） */}
+      {beltDemo && is2T && (
+        <div className="gv-sym-belt">
+          <span className="gv-sym-tau">
+            皮带累计扭转 <b>τ = {Math.round((beltTau * 180) / Math.PI)}°</b>
+            <span className="gv-sym-tau-turns">
+              （{beltTurns} 整圈{beltReady ? ' · 可以复原了' : ''}）
+            </span>
+          </span>
+          <button
+            type="button"
+            className="gv-sym-btn"
+            disabled={!beltReady}
+            onClick={() => setBeltRestoreTick(t => t + 1)}
+            title={
+              beltReady
+                ? '播放 Egan 皮带戏法：中段绕过固定端，把两整扭解开'
+                : '累计扭转满 720°（两整圈）后才能复原——单整扭拓扑上不可消'
+            }
+          >
+            ⟳ 720° 复原
+          </button>
         </div>
       )}
 
@@ -748,6 +870,14 @@ export default function GroupScene({
                 rotateSpeed={rotateSpeed}
                 showFigureTitle={showFigureTitle}
                 replaySignal={replayTick}
+                compose={compose}
+                centerOn={centerOn}
+                {...(beltDemo && is2T
+                  ? {
+                      onBeltChange: setBeltTau,
+                      beltRestoreSignal: beltRestoreTick,
+                    }
+                  : {})}
               />
             )}
           </I18nProvider>

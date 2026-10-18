@@ -1,0 +1,189 @@
+---
+/**
+ * Cell24 —— 二元四面体群 2T 的 24 个元素 = 正二十四胞体的 24 个顶点。
+ *
+ * 数据与几何全部实算（`.tmp-sl23/gen-figs.cjs` + 引擎 BFS 分层交叉核对）：
+ * - 24 个单位四元数 {±1,±i,±j,±k} ∪ {(±1±i±j±k)/2} 既是 SL(2,3) 的元素，
+ *   也是 ℝ⁴ 里正二十四胞体（24-cell）的顶点；相距为 1 的顶点对恰 96 对。
+ * - 以 8 个六阶元为生成元的凯莱图 = 这 96 条边（24-cell 的骨架）。
+ * - 从恒等元出发的 BFS 分层：距离 0/1/2/3 = 1 个 / 8 个 / 6+8 个 / 1 个，
+ *   对应元素阶 1 / 6 / 4 与 3 / 2——二十四胞体的距离分层就是群的阶分层。
+ * - 顶点优先 Schlegel 图：从 e 正上方看进去，第一层 8 个六阶元张成一个立方体
+ *   （二十四胞体的顶点图），中间层 6 个四阶元 + 8 个三阶元，最深处是 −I。
+ *
+ * 投影：4D 小角度预旋转（让对跖的 −I 从 e 背后露出）→ 从 (2,0,0,0) 向
+ * 超平面 x₀=1 做 Schlegel 投影 → 3D 转 2D。
+ */
+interface Props {
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { size = 480, caption, compact = false } = Astro.props
+
+// ── 4D 顶点：8 个轴点 + 16 个半整数点（顺序与 gen-figs.cjs 一致）──
+type V4 = [number, number, number, number]
+const V: V4[] = []
+for (const s of [1, -1]) {
+  V.push([s, 0, 0, 0], [0, s, 0, 0], [0, 0, s, 0], [0, 0, 0, s])
+}
+for (const a of [1, -1]) {
+  for (const b of [1, -1]) {
+    for (const c of [1, -1]) {
+      for (const d of [1, -1]) V.push([0.5 * a, 0.5 * b, 0.5 * c, 0.5 * d])
+    }
+  }
+}
+const E_IDX = 0 // (1,0,0,0)
+const NEG_IDX = 4 // (−1,0,0,0)
+
+// ── 预旋转：(x₀,x₁) 18°，(x₂,x₃) 12° ──
+const t1 = 0.32
+const t2 = 0.21
+const rot4 = (p: V4): V4 => {
+  const [x0, x1, x2, x3] = p
+  return [
+    x0 * Math.cos(t1) - x1 * Math.sin(t1),
+    x0 * Math.sin(t1) + x1 * Math.cos(t1),
+    x2 * Math.cos(t2) - x3 * Math.sin(t2),
+    x2 * Math.sin(t2) + x3 * Math.cos(t2),
+  ]
+}
+const Vr = V.map(rot4)
+
+// ── Schlegel：从 c=(2,0,0,0) 投到超平面 x₀=1，得 3D 坐标 ──
+const K = 2
+const P3 = Vr.map(v => [1, 2, 3].map(i => ((K - 1) * v[i]) / (K - v[0])))
+
+// ── 3D → 2D：绕 y 24°、绕 x −18° ──
+const ry = 0.42
+const rx = -0.31
+const P2 = P3.map(p => {
+  const [x, y, z] = p
+  const x1 = x * Math.cos(ry) + z * Math.sin(ry)
+  const z1 = -x * Math.sin(ry) + z * Math.cos(ry)
+  const y1 = y * Math.cos(rx) - z1 * Math.sin(rx)
+  return [x1, y1]
+})
+
+const VB = 470
+const C = VB / 2
+const SCALE = 240
+const pt = (i: number) => ({ x: C + P2[i][0] * SCALE, y: C + P2[i][1] * SCALE })
+
+// ── 边：4D 距离 1 的顶点对（96 条）──
+const EDGES: [number, number][] = []
+for (let i = 0; i < 24; i++) {
+  for (let j = i + 1; j < 24; j++) {
+    const d2 = Vr[i].reduce((s, x, k) => s + (x - Vr[j][k]) ** 2, 0)
+    if (Math.abs(d2 - 1) < 1e-9) EDGES.push([i, j])
+  }
+}
+// e 的 8 个邻居 + 它们之间的 12 条边（立方体）
+const NBRS = EDGES.filter(([i, j]) => i === E_IDX || j === E_IDX).map(([i, j]) => (i === E_IDX ? j : i))
+const LINK: [number, number][] = []
+for (let a = 0; a < NBRS.length; a++) {
+  for (let b = a + 1; b < NBRS.length; b++) {
+    if (EDGES.some(([i, j]) => (i === NBRS[a] && j === NBRS[b]) || (i === NBRS[b] && j === NBRS[a]))) {
+      LINK.push([NBRS[a], NBRS[b]])
+    }
+  }
+}
+
+// ── 元素阶 → 颜色 ──
+const orderOfIdx = (i: number): number => {
+  if (i === E_IDX) return 1
+  if (i === NEG_IDX) return 2
+  if (i >= 8 && i <= 15) return 6
+  if (i >= 16 && i <= 23) return 3
+  return 4
+}
+const ORDER_COLOR: Record<number, string> = { 1: '#7c3aed', 2: '#dc2626', 3: '#0891b2', 4: '#d97706', 6: '#0e9488' }
+const ORDER_R: Record<number, number> = { 1: 7.5, 2: 6.5, 6: 5, 3: 4.5, 4: 4.5 }
+
+// 标注锚点：立方体中心（8 个邻居的形心）
+const cubeC = NBRS.reduce((acc, i) => ({ x: acc.x + pt(i).x / NBRS.length, y: acc.y + pt(i).y / NBRS.length }), { x: 0, y: 0 })
+
+const aria =
+  '正二十四胞体的 Schlegel 图：24 个顶点就是二元四面体群的 24 个元素。从恒等元 e 看进去，第一层 8 个六阶元张成一个立方体，中间层是 6 个四阶元与 8 个三阶元，最深处是中心元 −I；96 条边全部画出，其中立方体的 12 条边加粗。'
+---
+
+<figure class={'c24' + (compact ? ' is-compact' : '')} style={`--c24-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB} ${VB}`} role="img" aria-label={aria}>
+    {/* 全部 96 条边（淡） */}
+    {EDGES.map(([i, j]) => {
+      const p = pt(i)
+      const q = pt(j)
+      return <line x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="var(--text-dim)" stroke-width="0.6" opacity="0.3" />
+    })}
+    {/* 立方体的 12 条边（加粗） */}
+    {LINK.map(([i, j]) => {
+      const p = pt(i)
+      const q = pt(j)
+      return <line x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke={ORDER_COLOR[6]} stroke-width="1.8" opacity="0.85" />
+    })}
+    {/* 顶点 */}
+    {V.map((_, i) => {
+      const p = pt(i)
+      const o = orderOfIdx(i)
+      return <circle key={i} cx={p.x} cy={p.y} r={ORDER_R[o]} fill={ORDER_COLOR[o]} opacity={i === NEG_IDX ? 0.95 : 0.9} />
+    })}
+
+    {/* 标注 */}
+    <text x={pt(E_IDX).x} y={pt(E_IDX).y - 14} font-size="13" font-weight="700" fill={ORDER_COLOR[1]} text-anchor="middle">
+      e
+    </text>
+    <text x={pt(NEG_IDX).x - 11} y={pt(NEG_IDX).y + 4} font-size="12" fontWeight="600" fill={ORDER_COLOR[2]} text-anchor="end">
+      −I
+    </text>
+    {/* 立方体标注 */}
+    <text x={cubeC.x + 4} y={cubeC.y - 34} font-size="11.5" fill={ORDER_COLOR[6]} fontWeight="600">
+      8 个六阶元 = 一个立方体
+    </text>
+    {/* 中间层标注 */}
+    <text x={C - 168} y={C + 60} font-size="11" fill="var(--text-dim)">
+      6 个四阶元
+    </text>
+    <text x={C - 168} y={C + 76} font-size="11" fill="var(--text-dim)">
+      8 个三阶元
+    </text>
+    <line x1={C - 96} y1={C + 66} x2={pt(2).x - 4} y2={pt(2).y + 2} stroke="var(--text-dim)" stroke-width="0.7" opacity="0.55" />
+
+    {/* 图例：元素阶 */}
+    <g>
+      {([1, 2, 3, 4, 6] as const).map((o, k) => {
+        const lx = C - 148 + k * 60
+        return (
+          <g>
+            <circle cx={lx} cy={VB - 16} r="4.5" fill={ORDER_COLOR[o]} />
+            <text x={lx + 9} y={VB - 12} font-size="11" fill="var(--text-dim)">阶 {o}</text>
+          </g>
+        )
+      })}
+    </g>
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .c24 {
+    margin: 1.6rem 0;
+  }
+  .c24.is-compact {
+    margin: 0;
+  }
+  .c24 svg {
+    width: 100%;
+    max-width: var(--c24-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .c24 figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>

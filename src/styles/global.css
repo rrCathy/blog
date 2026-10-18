@@ -1231,6 +1231,39 @@ a.series-nav-title:hover {
   opacity: 0.45;
   cursor: not-allowed;
 }
+/* 矩阵群元素 label（SL(2,3) 的 2×2 小矩阵）*/
+.gv-matrix {
+  display: inline-grid;
+  gap: 0 4px;
+  vertical-align: middle;
+  font-size: 0.92em;
+  line-height: 1.15;
+}
+.gv-matrix-cell {
+  text-align: center;
+  min-width: 0.55em;
+}
+/* 2T 皮带控制行：τ 读数 + 720° 复原按钮 */
+.gv-sym-belt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border-primary, var(--border));
+  background: var(--bg-primary, var(--bg-soft));
+  font-size: 0.76rem;
+  color: var(--text-secondary, var(--text-soft));
+}
+.gv-sym-tau b {
+  color: var(--accent-teal, var(--accent-ink));
+  font-family: var(--font-mono);
+}
+.gv-sym-tau-turns {
+  color: var(--text-dim);
+  margin-left: 0.3rem;
+}
 
 /* 悬停气泡改由引擎渲染（useSceneState 的 hoverBubble / SceneHoverBubble），
  * 不再需要壳自绘；此处原有的 .gv-tip 规则已移除。 */

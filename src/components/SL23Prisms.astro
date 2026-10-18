@@ -1,0 +1,152 @@
+---
+/**
+ * SL23Prisms —— Cay(SL(2,3); {−I, t}) = 4 个互不相交的三棱柱。
+ *
+ * 数据来自引擎实跑：生成元取唯一的二阶元（中心元 −I）与一个三阶元 t 时，
+ * 24 个元素分成 4 个连通分量，每个分量 6 顶点 9 边 = 三棱柱
+ * （⟨−I, t⟩ ≅ C₃×C₂ ≅ C₆；t-边是两个三角形，−I-边是连接两三角形的三条匹配）。
+ * 第一只棱柱标注了 e / t / z，其余三只是同样结构的副本。
+ */
+interface Props {
+  size?: number
+  caption?: string
+  compact?: boolean
+}
+
+const { size = 640, caption, compact = false } = Astro.props
+
+const VB_W = 640
+const VB_H = 218
+/** 每只棱柱的水平中心 */
+const CX = [95, 255, 415, 575]
+const TOP_Y = 72
+const BOT_Y = 164
+const R = 42 // 三角形外接圆半径
+const NODE_R = 8.5
+
+/** 三棱柱的 6 个顶点：上三角 0/1/2（顶视 90°/210°/330°），下三角 3/4/5 正下方 */
+const prismPts = (cx: number) => {
+  const top = [0, 1, 2].map(i => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / 3
+    return { x: cx + R * Math.cos(a), y: TOP_Y + R * Math.sin(a) }
+  })
+  const bot = top.map(p => ({ x: p.x, y: p.y + (BOT_Y - TOP_Y) }))
+  return [...top, ...bot]
+}
+
+/** t-边：两个三角形（上 0-1-2、下 3-4-5）；z-边：三条竖边 0-3 / 1-4 / 2-5 */
+const T_EDGES: [number, number][] = [
+  [0, 1],
+  [1, 2],
+  [2, 0],
+  [3, 4],
+  [4, 5],
+  [5, 3],
+]
+const Z_EDGES: [number, number][] = [
+  [0, 3],
+  [1, 4],
+  [2, 5],
+]
+
+const T_COLOR = '#0e9488'
+const Z_COLOR = '#dc2626'
+
+const aria =
+  'SL(2,3) 以中心元 −I 和三阶元 t 为生成元的凯莱图：24 个元素分成 4 个互不相交的连通分量，每个分量是一个三棱柱——两条三角形（t-边）由三条匹配边（−I-边）相连。'
+---
+
+<figure class={'pr' + (compact ? ' is-compact' : '')} style={`--pr-max:${size}px`}>
+  <svg viewBox={`0 0 ${VB_W} ${VB_H}`} role="img" aria-label={aria}>
+    {CX.map((cx, pi) => {
+      const pts = prismPts(cx)
+      const first = pi === 0
+      return (
+        <g key={pi}>
+          {/* z-边（三条匹配） */}
+          {Z_EDGES.map(([a, b], i) => (
+            <line
+              x1={pts[a].x}
+              y1={pts[a].y}
+              x2={pts[b].x}
+              y2={pts[b].y}
+              stroke={Z_COLOR}
+              stroke-width={first && i === 0 ? 2.2 : 1.4}
+              opacity={first ? 0.85 : 0.4}
+            />
+          ))}
+          {/* t-边（两个三角形） */}
+          {T_EDGES.map(([a, b], i) => (
+            <line
+              x1={pts[a].x}
+              y1={pts[a].y}
+              x2={pts[b].x}
+              y2={pts[b].y}
+              stroke={T_COLOR}
+              stroke-width={first && i < 3 ? 2.2 : 1.4}
+              opacity={first ? 0.85 : 0.4}
+            />
+          ))}
+          {/* 顶点 */}
+          {pts.map((p, i) => (
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={NODE_R}
+              fill="var(--bg-canvas)"
+              stroke="var(--text)"
+              stroke-width="1.6"
+              opacity={first ? 1 : 0.55}
+            />
+          ))}
+          {first && (
+            <g>
+              <text x={pts[0].x} y={pts[0].y - 15} font-size="13" font-weight="600" fill="var(--text)" text-anchor="middle">
+                e
+              </text>
+              {/* t 边标注：上三角形右边 */}
+              <text x={pts[1].x + 14} y={pts[1].y - 6} font-size="12" fill={T_COLOR} font-weight="600">
+                t
+              </text>
+              {/* z 边标注：左边竖边 */}
+              <text x={pts[0].x - 20} y={(pts[0].y + pts[3].y) / 2} font-size="12" fill={Z_COLOR} font-weight="600" text-anchor="end">
+                −I
+              </text>
+            </g>
+          )}
+        </g>
+      )
+    })}
+
+    {/* 结构注记：只标在第一只上 */}
+    <text x={CX[0]} y={VB_H - 14} font-size="11.5" fill="var(--text-dim)" text-anchor="middle">
+      ⟨−I, t⟩ ≅ C₃ × C₂ ≅ C₆
+    </text>
+    <text x={(CX[1] + CX[3]) / 2} y={VB_H - 14} font-size="11.5" fill="var(--text-dim)" text-anchor="middle">
+      互不相交的副本 × 4
+    </text>
+  </svg>
+  {!compact && caption && <figcaption set:html={caption} />}
+</figure>
+
+<style>
+  .pr {
+    margin: 1.6rem 0;
+  }
+  .pr.is-compact {
+    margin: 0;
+  }
+  .pr svg {
+    width: 100%;
+    max-width: var(--pr-max);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .pr figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
