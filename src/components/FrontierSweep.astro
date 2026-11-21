@@ -1,0 +1,129 @@
+---
+/**
+ * 前沿扫描示意：立方体图按上排优先的顺序处理完四个顶点后的状态。
+ * 上排 0,1,4,5 已处理，下排 3,2,7,6 是前沿。
+ * 选中的边 0-1、1-4、4-5、1-2、4-7 让 2 和 7 经上排连成一块。
+ */
+const up = [
+  { id: '0', x: 118 },
+  { id: '1', x: 258 },
+  { id: '4', x: 398 },
+  { id: '5', x: 538 },
+]
+const down = [
+  { id: '3', x: 118 },
+  { id: '2', x: 258 },
+  { id: '7', x: 398 },
+  { id: '6', x: 538 },
+]
+const Y_UP = 78
+const Y_DN = 214
+
+const taken = ['0-1', '1-4', '4-5', '1-2', '4-7']
+const edges = [
+  ['0', '1'], ['1', '4'], ['4', '5'],
+  ['3', '2'], ['2', '7'], ['7', '6'],
+  ['0', '3'], ['1', '2'], ['4', '7'], ['5', '6'],
+]
+const at = {}
+up.forEach((v) => (at[v.id] = [v.x, Y_UP]))
+down.forEach((v) => (at[v.id] = [v.x, Y_DN]))
+
+const hot = ['2', '7']        // 同一块
+const lone = ['3', '6']       // 孤点块
+
+const key = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`)
+const isTaken = (a, b) => taken.includes(key(a, b))
+---
+
+<figure class="fs-fig">
+  <svg viewBox="0 0 680 300" role="img" aria-label="前沿扫描：立方体图处理完上排四个顶点后的状态">
+    <rect x="70" y="42" width="516" height="100" fill="var(--text)" opacity="0.05" rx="6" />
+    <text x="78" y="34" class="fs-lab">已处理</text>
+    <text x="78" y="180" class="fs-lab">前沿</text>
+
+    <line x1="70" y1="152" x2="586" y2="152" stroke="var(--text-dim)" stroke-width="1.2"
+      stroke-dasharray="5 5" opacity="0.65" />
+
+    {edges.map(([a, b]) => {
+      const [x1, y1] = at[a]
+      const [x2, y2] = at[b]
+      const on = isTaken(a, b)
+      return (
+        <line
+          x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke={on ? 'var(--accent, #c2410c)' : 'var(--border)'}
+          stroke-width={on ? 3 : 1.5}
+          opacity={on ? 1 : 0.8}
+        />
+      )
+    })}
+
+    {up.map((v) => (
+      <g>
+        <circle cx={v.x} cy={Y_UP} r="10" fill="var(--text)" opacity="0.32" />
+        <text x={v.x} y={Y_UP + 4} text-anchor="middle" class="fs-id">{v.id}</text>
+      </g>
+    ))}
+
+    {down.map((v) => {
+      const isHot = hot.includes(v.id)
+      const isLone = lone.includes(v.id)
+      return (
+        <g>
+          <circle
+            cx={v.x} cy={Y_DN} r="11"
+            fill={isHot ? 'var(--accent, #c2410c)' : 'var(--bg, #fff)'}
+            stroke={isHot ? 'var(--accent, #c2410c)' : isLone ? '#2563eb' : 'var(--border)'}
+            stroke-width={isLone ? 2.4 : 1.6}
+            stroke-dasharray={isLone ? '3 3' : undefined}
+          />
+          <text x={v.x} y={Y_DN + 4} text-anchor="middle" class="fs-id"
+            fill={isHot ? '#fff' : 'var(--text-dim)'}>{v.id}</text>
+        </g>
+      )
+    })}
+
+    <path d="M 258 244 Q 328 268 398 244" fill="none" stroke="var(--accent, #c2410c)"
+      stroke-width="1.4" stroke-dasharray="4 4" opacity="0.85" />
+    <text x="328" y="288" text-anchor="middle" class="fs-tag">同一块（经上排相连）</text>
+    <text x="118" y="252" text-anchor="middle" class="fs-tag" fill="#2563eb">孤点</text>
+    <text x="538" y="252" text-anchor="middle" class="fs-tag" fill="#2563eb">孤点</text>
+  </svg>
+  <figcaption>
+    立方体图扫完上排四个顶点后的状态。虚线是切线，下排四个顶点是前沿。
+    粗线是已选中的边。2 和 7 之间没有边，但它们各自向上的边通到上排同一块里，
+    所以已经属于同一个连通分量。3 和 6 没有被任何选中的边碰到，是孤点块。
+  </figcaption>
+</figure>
+
+<style>
+  .fs-fig {
+    margin: 1.6rem 0;
+  }
+  .fs-fig svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .fs-lab {
+    font-size: 11px;
+    fill: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+  .fs-id {
+    font-size: 12px;
+    fill: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .fs-tag {
+    font-size: 11px;
+    fill: var(--text-dim);
+  }
+  .fs-fig figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--text-dim);
+  }
+</style>

@@ -1,0 +1,101 @@
+---
+/**
+ * 正四面体的 10 个骨架：K4 的连通非空边子集按旋转（A4）分出的轨道。
+ * 边编号与脚本一致，rep 是每个轨道的字典序最小代表。
+ * 第 5、6 个是三边折线，互为镜像，在 A4 下不同轨道。
+ */
+const reps = [
+  { edges: ['01'], n: 1 },
+  { edges: ['01', '02'], n: 2 },
+  { edges: ['01', '02', '03'], n: 3 },
+  { edges: ['01', '02', '12'], n: 3 },
+  { edges: ['01', '03', '12'], n: 3 },
+  { edges: ['02', '03', '12'], n: 3 },
+  { edges: ['01', '02', '03', '12'], n: 4 },
+  { edges: ['02', '03', '12', '13'], n: 4 },
+  { edges: ['01', '02', '03', '12', '13'], n: 5 },
+  { edges: ['01', '02', '03', '12', '13', '23'], n: 6 },
+]
+
+// 三角形加中心：0 上、1 左下、2 右下、3 中心
+const P = {
+  0: [42, 14],
+  1: [14, 62],
+  2: [70, 62],
+  3: [42, 44],
+}
+
+const allEdges = ['01', '02', '12', '03', '13', '23']
+
+const W = 680
+const CW = 128
+const CH = 104
+const COLS = 5
+
+const pos = (i) => {
+  const c = i % COLS
+  const r = Math.floor(i / COLS)
+  return [c * (W / COLS) + (W / COLS - 86) / 2, r * CH + 6]
+}
+---
+
+<figure class="ts-fig">
+  <svg viewBox={`0 0 ${W} ${CH * 2 + 10}`} role="img" aria-label="正四面体的十个骨架，按旋转分类">
+    {reps.map((rep, i) => {
+      const [ox, oy] = pos(i)
+      return (
+        <g transform={`translate(${ox},${oy})`}>
+          {allEdges.map((e) => {
+            const on = rep.edges.includes(e)
+            const [a, b] = e.split('')
+            const [x1, y1] = P[a]
+            const [x2, y2] = P[b]
+            return (
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={on ? 'var(--accent, #c2410c)' : 'var(--border)'}
+                stroke-width={on ? 3 : 1.2}
+                stroke-linecap="round"
+                opacity={on ? 1 : 0.55}
+              />
+            )
+          })}
+          {[0, 1, 2].map((v) => (
+            <circle
+              cx={P[v][0]} cy={P[v][1]} r={3.6}
+              fill="var(--text-dim)"
+            />
+          ))}
+          <circle cx={P[3][0]} cy={P[3][1]} r={3.6} fill="var(--bg, #fff)" stroke="var(--text-dim)" stroke-width="1.4" />
+          <text x={42} y={86} text-anchor="middle" class="ts-num">{i + 1}</text>
+        </g>
+      )
+    })}
+  </svg>
+  <figcaption>
+    正四面体的 10 个骨架，每个画一个轨道的代表。粗线是选中的边。
+    第 5、6 个都是三边折线，互为镜像，旋转转不过去，所以算两个。
+  </figcaption>
+</figure>
+
+<style>
+  .ts-fig {
+    margin: 1.6rem 0;
+  }
+  .ts-fig svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .ts-num {
+    font-size: 11px;
+    fill: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .ts-fig figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--text-dim);
+  }
+</style>

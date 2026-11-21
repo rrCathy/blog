@@ -177,6 +177,8 @@ export interface GroupSceneProps {
   // ── 对称性视图专属 ──
   /** 是否开启元素作用演示(默认 true)。false = 只显示静态多面体 */
   showAction?: boolean
+  /** 对称性视图：主形与对偶形切换（立方体↔八面体、二十面体↔十二面体）。缺省 false = 主形 */
+  variant?: boolean
   /** 演示元素：按元素记号(label)或 id 指定，如 '(234)'、'(12)(34)'。缺省自动取首个非恒等 3 阶元 */
   actionElement?: string
   /** 显示"元素操作台"：一排元素按钮，读者可自选元素观察作用(默认 false) */
@@ -369,6 +371,7 @@ export default function GroupScene({
   meta = true,
   showAction,
   actionElement,
+  variant = false,
   picker = false,
   pickerOrders,
   includeIdentity = false,
@@ -879,6 +882,7 @@ export default function GroupScene({
                 group={group}
                 showAction={symShowAction}
                 actionElementId={symActionElementId}
+                variant={variant}
                 dark={isDark}
                 locked={locked}
                 rotateSpeed={rotateSpeed}
